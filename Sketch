@@ -1,0 +1,35 @@
+statement -> import | def | run
+
+import -> 'import' id
+
+def -> id '=' expr
+
+run -> expr
+
+expr -> (expr) | lit | let | id | fcall
+
+let -> 'let' name '=' expr
+
+fcall -> expr expr
+
+-- f x
+-- statement
+-- run (expr)
+-- run (fcall)
+-- run (fcall (expr expr))
+-- run (fcall (id id))
+-- run (fcall (id(f) id(x)))
+
+[Run (FCall (Var "print") (FCall (Var "id") (Literal (IntL 5))) )]
+[Run (FCall (Var "print") (FCall (Var "id") (FCall (Literal (IntL 4)) (Literal (IntL 3)))))]
+
+FCall (Var "add") (FCall (Literal (IntL 1)) (Literal (IntL 2)))
+FCall (Var "add") (FCall (Literal (IntL 1)) (Literal (IntL 2)))
+
+Literal (ListL [Literal (CharL 'H'),Literal (CharL 'e'),Literal (CharL 'l'),Literal (CharL 'l'),Literal (CharL 'o'),
+Literal (CharL ','),Literal (CharL ' '),Literal (CharL 'W'),Literal (CharL 'o'),Literal (CharL 'r'),Literal (CharL 'l'),
+Literal (CharL 'd'),Literal (CharL '!')]
+
+ RTState {getVals = [("f",FuncV "x" (Literal (LambdaL "y" (Literal (LambdaL "z" (Var "x"))))) []),("range",FuncV "s" (Literal (LambdaL "e" (If (FCall (FCall (Var "eq") (Var "s")) (Var "e")) (Literal (ListL [])) (FCall (FCall (Var "cons") (Var "s")) (FCall (FCall (Var "range") (FCall (FCall (Var "add") (Var "s")) (Literal (IntL 1)))) (Var "e")))))) []),("map",FuncV "f" (Literal (LambdaL "l" (If (Var "l") (Let "x" (FCall (Var "head") (Var "l")) (Let "xs" (FCall (Var "tail") (Var "l")) (FCall (FCall (Var "cons") (FCall (Var "f") (Var "x"))) (FCall (FCall (Var "map") (Var "f")) (Var "xs"))))) (Var "l")))) []),("factorial",FuncV "n" (If (Var "n") (FCall (FCall (Var "mul") (Var "n")) (FCall (Var "factorial") (FCall (FCall (Var "sub") (Var "n")) (Literal (IntL 1))))) (Literal (IntL 1))) []),("comp",FuncV "f" (Literal (LambdaL "g" (Literal (LambdaL "x" (FCall (Var "f") (FCall (Var "g") (Var "x"))))))) []),("eq",FuncV "x" (Literal (LambdaL "y" (FCall (Var "not") (FCall (FCall (Var "ord") (Var "x")) (Var "y"))))) []),("not",FuncV "x" (If (Var "x") (Literal (BoolL False)) (Literal (BoolL True))) []),("toBool",FuncV "x" (FCall (Var "not") (FCall (Var "not") (Var "x"))) []),("print",FuncV "x" (FCall (Var "put") (FCall (Var "show") (Var "x"))) []),("id",FuncV "x" (Var "x") []),("put",NativeF (RTValue -> RTState -> RTValue) []),("show",NativeF (RTValue -> RTState -> RTValue) []),("debugRaw",NativeF (RTValue -> RTState -> RTValue) []),("head",NativeF (RTValue -> RTState -> RTValue) []),("tail",NativeF (RTValue -> RTState -> RTValue) []),("exec",NativeF (RTValue -> RTState -> RTValue) []),("typeof",NativeF (RTValue -> RTState -> RTValue) []),("add",FuncV "x" (Value (NativeF (RTValue -> RTState -> RTValue) [])) []),("sub",FuncV "x" (Value (NativeF (RTValue -> RTState -> RTValue) [])) []),("ord",FuncV "x" (Value (NativeF (RTValue -> RTState -> RTValue) [])) []),("mul",FuncV "x" (Value (NativeF (RTValue -> RTState -> RTValue) [])) []),("cons",FuncV "x" (Value (NativeF (RTValue -> RTState -> RTValue) [])) [])],
+          getArgs = [("z",IntV 5)],
+          getClosures = [("y",IntV 4)]}

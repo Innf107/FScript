@@ -1,0 +1,52 @@
+-- General
+id = \x -> x;
+const = \x -> \y -> x;
+print = \x -> put (show x);
+not = \x -> if x then False else True;
+eq = \x -> \y -> not (ord x y);
+gt = \x -> \y -> eq 1 (ord x y);
+lt = \x -> \y -> eq (-1) (ord x y);
+and = \x -> \y -> if x then y else x;
+or = \x -> \y -> if x then x else y;
+ge = \x -> \y -> or (gt x y) (eq x y);
+le = \x -> \y -> or (lt x y) (eq x y);
+comp = \f -> \g -> \x -> f (g x);
+toBool = comp not not;
+
+
+-- Math
+factorial = \n -> if n
+                  then mul n (factorial (sub n 1))
+                  else 1;
+
+pow = \x -> \n -> if n
+    then mul x (pow x (sub n 1))
+    else 1;
+
+
+-- Lists
+map = \f -> \l -> if l then let x = head l in let xs = tail l in
+        cons (f x) (map f xs)
+        else [];
+
+range = \s -> \e -> if eq s e
+                    then []
+                    else cons s (range (add s 1) e);
+
+rangeI = \s -> \e -> range s (add e 1);
+
+filter = \f -> \l -> if l then let x = head l in let xs = tail l in
+    if f x
+        then cons x (filter f xs)
+        else filter f xs
+    else [];
+
+foldl = \f -> \z -> \l -> if l then let x = head l in let xs = tail l in
+    (foldl f (f z x) xs)
+    else z;
+
+length = \l -> if l
+    then add 1 (length (tail l))
+    else 0;
+
+null = eq [];
