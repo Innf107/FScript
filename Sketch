@@ -33,3 +33,19 @@ Literal (CharL 'd'),Literal (CharL '!')]
  RTState {getVals = [("f",FuncV "x" (Literal (LambdaL "y" (Literal (LambdaL "z" (Var "x"))))) []),("range",FuncV "s" (Literal (LambdaL "e" (If (FCall (FCall (Var "eq") (Var "s")) (Var "e")) (Literal (ListL [])) (FCall (FCall (Var "cons") (Var "s")) (FCall (FCall (Var "range") (FCall (FCall (Var "add") (Var "s")) (Literal (IntL 1)))) (Var "e")))))) []),("map",FuncV "f" (Literal (LambdaL "l" (If (Var "l") (Let "x" (FCall (Var "head") (Var "l")) (Let "xs" (FCall (Var "tail") (Var "l")) (FCall (FCall (Var "cons") (FCall (Var "f") (Var "x"))) (FCall (FCall (Var "map") (Var "f")) (Var "xs"))))) (Var "l")))) []),("factorial",FuncV "n" (If (Var "n") (FCall (FCall (Var "mul") (Var "n")) (FCall (Var "factorial") (FCall (FCall (Var "sub") (Var "n")) (Literal (IntL 1))))) (Literal (IntL 1))) []),("comp",FuncV "f" (Literal (LambdaL "g" (Literal (LambdaL "x" (FCall (Var "f") (FCall (Var "g") (Var "x"))))))) []),("eq",FuncV "x" (Literal (LambdaL "y" (FCall (Var "not") (FCall (FCall (Var "ord") (Var "x")) (Var "y"))))) []),("not",FuncV "x" (If (Var "x") (Literal (BoolL False)) (Literal (BoolL True))) []),("toBool",FuncV "x" (FCall (Var "not") (FCall (Var "not") (Var "x"))) []),("print",FuncV "x" (FCall (Var "put") (FCall (Var "show") (Var "x"))) []),("id",FuncV "x" (Var "x") []),("put",NativeF (RTValue -> RTState -> RTValue) []),("show",NativeF (RTValue -> RTState -> RTValue) []),("debugRaw",NativeF (RTValue -> RTState -> RTValue) []),("head",NativeF (RTValue -> RTState -> RTValue) []),("tail",NativeF (RTValue -> RTState -> RTValue) []),("exec",NativeF (RTValue -> RTState -> RTValue) []),("typeof",NativeF (RTValue -> RTState -> RTValue) []),("add",FuncV "x" (Value (NativeF (RTValue -> RTState -> RTValue) [])) []),("sub",FuncV "x" (Value (NativeF (RTValue -> RTState -> RTValue) [])) []),("ord",FuncV "x" (Value (NativeF (RTValue -> RTState -> RTValue) [])) []),("mul",FuncV "x" (Value (NativeF (RTValue -> RTState -> RTValue) [])) []),("cons",FuncV "x" (Value (NativeF (RTValue -> RTState -> RTValue) [])) [])],
           getArgs = [("z",IntV 5)],
           getClosures = [("y",IntV 4)]}
+
+
+instance Bifunctor Either where
+    bimap f _ (Left x)  = Left  (f x)
+    bimap _ f (Right x) = Right (f x)
+
+instance Bifunctor (,) where
+    bimap f g (x, y) = (f x, g y)
+
+
+ ____   ____   ______   _______   __   ______   __________
+|  __| |  __| |   ___| |   __  | |  | |  __  | |___    ___|
+| |__  | |__  |  |     |  |__| | |  | | |__| |     |  |
+|  __| |__  | |  |     |      _| |  | |  ____|     |  |
+| |     __| | |  |___  |  |\  \  |  | | |          |  |
+|_|    |____| |______| |__| \__\ |__| |_|          |__|

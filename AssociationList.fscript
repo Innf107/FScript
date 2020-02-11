@@ -1,0 +1,19 @@
+getAL = \k -> \l -> let x = head l in let xs = tail l in
+    let kk = head x in
+    if eq k kk
+        then getAt 1 x
+        else getAL k xs;
+
+setAL = \k -> \v -> \l -> if l
+    then let x = head l in let xs = tail l in
+        let kk = head x in
+        if eq k kk
+            then cons [k, v] xs
+            else cons x (setAL k v xs)
+    else [[k, v]];
+
+mapKeys = \f -> \l -> if l
+    then let x = head l in let xs = tail l in
+         let k = head x in let v = getAt 1 x in
+         cons [f k, v] (mapKeys f xs)
+    else l;

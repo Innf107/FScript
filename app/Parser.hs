@@ -13,6 +13,7 @@ import Data.Maybe
 import Data.Either
 --import Debug.Trace
 import Lib
+import Text.Parsec.Prim ((<?>))
 
 data Statement = NOP
                | Import String ImportType Bool
@@ -20,6 +21,7 @@ data Statement = NOP
                | Run Expr
                deriving (Show, Eq, Read)
 
+-- TODO: As
 data ImportType = All
                 | Exposing [String]
     deriving (Show, Eq, Read)
@@ -32,7 +34,7 @@ data Expr = Literal Lit
           | Value RTValue
           deriving (Show, Eq, Read)
 
-data Lit = IntL Integer
+data Lit = NumL Float
          | CharL Char
          | ListL [Expr]
          | BoolL Bool
@@ -41,7 +43,7 @@ data Lit = IntL Integer
          | MapL [(String, Expr)]
          deriving (Show, Eq, Read)
 
-data RTValue = IntV Integer
+data RTValue = NumV Float
              | CharV Char
              | ListV [RTValue]
              | BoolV Bool
@@ -79,23 +81,25 @@ parseAsRepl :: String -> Either ParseError [Statement]
 parseAsRepl = parse (many (statement)) "REPL"
 
 parseAsReplExpr :: String -> Either ParseError [Statement]
-parseAsReplExpr = fmap (map Run) . parse (many (expr)) "REPL"
+parseAsReplExpr = fmap (fmap Run) . parse (many (expr)) "REPL"
 
 -- Identifier
 reservedIDs :: [String]
-reservedIDs = ["if", "then", "else", "import", "exposing", "qualified", "let", "in"]
+reservedIDs = ["if", "then", "else", "import", "exposing", "qualified", "let", "in", ";", ",", "=", "->"]
 
 identifier :: Parser String
-identifier = noPof (string <$> reservedIDs) (do {x <- letter; xs <- many (alphaNum <|> oneOf "._"); return (x:xs)})
+identifier = noPof (string <$> reservedIDs) (do {x <- letter; xs <- many (alphaNum <|> oneOf "._'"); return (x:xs)}) <?> "identifier"
 
+operator :: Parser String
+operator = (many1 $ oneOf "+-_*/~%&$§!#<>|^°?:") <?> "operator"
 
 -- Statement
 statement :: Parser Statement
-statement = do 
+statement = do
     spaces 
     s <- try commentS <|> statement'
     spaces
-    return s-- <|> return NOP
+    return s -- <|> return NOP
 
 statement' :: Parser Statement
 statement' = do
@@ -107,7 +111,7 @@ statement' = do
 
 
 commentS :: Parser Statement
-commentS = spaces >> string "--" >> many (noneOf "\n") >> return NOP
+commentS = (spaces >> string "--" >> many (noneOf "\n") >> return NOP) <?> "comment"
 
 importS :: Parser Statement
 importS = do
@@ -127,12 +131,12 @@ exposingI :: Parser ImportType
 exposingI = do
     string "exposing"
     spaces
-    ids <- sepBy identifier (char ',' >> spaces)
+    ids <- sepBy (identifier <|> operator) (char ',' >> spaces)
     return $ Exposing ids
 
 defS :: Parser Statement
 defS = do
-    name <- identifier
+    name <- identifier <|> operator
     spaces
     char '='
     spaces
@@ -159,8 +163,13 @@ expr = do
 expr' :: Parser Expr
 expr' = do
     spaces
-    ex <- try (parensE <|> litE <|> letE <|> ifE) <|> try varE -- <|> fcallE {- try (chainl1 (try expr') (try infixE)) <|> -}
+    ex <- try (expr'' `chainl1` infixE) <|> expr''
     spaces
+    return ex
+
+expr'' :: Parser Expr
+expr'' = do
+    ex <- try (parensE <|> litE <|> letE <|> ifE) <|> varE -- <|> fcallE {- try (chainl1 (try expr') (try infixE)) <|> -}
     return ex
 
 -- {f x y z}
@@ -215,19 +224,18 @@ ifE = do
 
 varE :: Parser Expr
 varE = do
-    name <- identifier
+    name <- identifier <|> operator
     return $ Var name
 
 
 infixE :: Parser (Expr -> Expr -> Expr)
 infixE = do
     spaces
-    op <- (operatorE <|> backtickE)
+    op <- (operator <|> backtick)
     spaces
     return $ (\e1 e2 -> FCall (FCall (Var op) e1) e2)
     where
-        operatorE = many1 (oneOf "+-/|<>^°~*.")
-        backtickE = do
+        backtick = do
             char '`'
             op <- identifier
             char '`'
@@ -249,15 +257,22 @@ fcallE = do
 -- + (+ x y) z
 -- (+ ((+ x) y) z
 
+(<++>) a b = (++) <$> a <*> b
+(<:>)  a b = (:)  <$> a <*> b
+
 -- Literals
 litE :: Parser Expr
-litE = Literal <$> (try spaces >> (intL <|> boolL <|> nullL <|> charL <|> listL <|> stringL <|> lambdaL <|> mapL))
+litE = Literal <$> (try spaces >> (numL <|> boolL <|> nullL <|> charL <|> listL <|> stringL <|> lambdaL <|> mapL))
 
-intL :: Parser Lit
-intL = do
-        sign <- option "" (string "-")
-        x <- many1 digit
-        return $ IntL (read (sign ++ x))
+numL :: Parser Lit
+numL = (NumL . read) <$> (int <++> decimal <++> exponent)
+    where decimal = option "" $ char '.' <:> number
+          exponent = option "" $ oneOf "Ee" <:> number
+          int    = (plus <|> minus <|> number)
+          plus   = char '+' >> number
+          minus  = char '-' <:> number
+          number = many1 digit
+
 
 boolL :: Parser Lit
 boolL = do

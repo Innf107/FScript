@@ -1,10 +1,10 @@
 name:                FScriptII
 version:             0.1.0.0
-github:              "Github username here/FScriptII"
+github:              "Innf107/FScript"
 license:             BSD3
-author:              "Author name here"
+author:              "Prophet"
 maintainer:          "Author email here"
-copyright:           "2019 Author name here"
+copyright:           "2019 Prophet"
 
 extra-source-files:
 - README.md
@@ -24,6 +24,7 @@ dependencies:
 - parsec
 - directory
 - haskeline
+- process
 
 library:
   source-dirs: src

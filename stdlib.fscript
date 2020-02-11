@@ -1,4 +1,5 @@
 -- General
+>> = comp;
 id = \x -> x;
 const = \x -> \y -> x;
 print = \x -> put (show x);
@@ -11,8 +12,8 @@ or = \x -> \y -> if x then x else y;
 ge = \x -> \y -> or (gt x y) (eq x y);
 le = \x -> \y -> or (lt x y) (eq x y);
 comp = \f -> \g -> \x -> f (g x);
-toBool = comp not not;
-
+toBool = not >> not;
+flip = \f -> \x -> \y -> f y x;
 
 -- Math
 factorial = \n -> if n
@@ -23,17 +24,30 @@ pow = \x -> \n -> if n
     then mul x (pow x (sub n 1))
     else 1;
 
+*  = mul;
++  = add;
+--/  = div;
+-  = sub;
+^  = pow;
+|> = \x -> \f -> f x;
+:  = cons;
 
 -- Lists
 map = \f -> \l -> if l then let x = head l in let xs = tail l in
         cons (f x) (map f xs)
         else [];
 
+<$> = map;
+
 range = \s -> \e -> if eq s e
                     then []
                     else cons s (range (add s 1) e);
 
+:: = range;
+
 rangeI = \s -> \e -> range s (add e 1);
+
+::+ = rangeI;
 
 filter = \f -> \l -> if l then let x = head l in let xs = tail l in
     if f x
@@ -56,23 +70,6 @@ getAt = \n -> \l -> let x = head l in let xs = tail l in
     if n
         then getAt (sub n 1) xs
         else x;
-
-
--- Association Lists
-getAL = \k -> \l -> let x = head l in let xs = tail l in
-    let kk = head x in
-    if eq k kk
-        then getAt 1 x
-        else getAL k xs;
-
-setAL = \k -> \v -> \l -> if l
-    then let x = head l in let xs = tail l in
-        let kk = head x in
-        if eq k kk
-            then cons [k, v] xs
-            else cons x (setAL k v xs)
-    else [[k, v]];
-
 
 -- IO
 compIOForever = \a -> \f -> compIO a (\x -> compIO (f x) (\y -> compIOForever a f));

@@ -7,6 +7,7 @@ import Data.List as L
 import Control.Monad
 import System.IO
 import System.Directory
+import System.Process
 import Debug.Trace
 import Control.Applicative ((<|>))
 import Data.Maybe
@@ -15,6 +16,7 @@ import Text.Parsec.Error (ParseError)
 import Text.Read (readEither)
 import System.Console.Haskeline
 import Data.Char
+import Data.String as S
 
 updateVals :: ([(String, RTValue)] -> [(String, RTValue)]) -> RTState -> RTState
 updateVals f state = RTState {getVals=f(getVals state), getArgs=getArgs state, getClosures = (getClosures state)}
@@ -49,10 +51,20 @@ main = do
         let noStdLib = "--debug-no-stdlib" `elem` args
         case repl of
             True -> do
-                putStrLn "Running FScript v2.0 in Repl mode."
+                printSplashScreen
                 state <- if noStdLib then return emptyState else fst <$> runStatement (Import "stdlib" All False) emptyState
                 runAsRepl debugParse noPrint exprOnly state
             False -> runFile filePath debugParse exprOnly noStdLib
+
+printSplashScreen :: IO ()
+printSplashScreen = do
+                  putStrLn " ____   ____   ______   _______   __   ______   __________"
+                  putStrLn "|  __| |  __| |   ___| |   __  | |  | |  __  | |___    ___|"
+                  putStrLn "| |__  | |__  |  |     |  |__| | |  | | |__| |     |  |    "
+                  putStrLn "|  __| |__  | |  |     |      _| |  | |  ____|     |  |    "
+                  putStrLn "| |     __| | |  |___  |  |\\  \\  |  | | |          |  |  "
+                  putStrLn "|_|    |____| |______| |__| \\__\\ |__| |_|          |__|    v2.1"
+
 
 runFile :: String -> Bool -> Bool -> Bool -> IO ()
 runFile path debugParser exprOnly noStdLib = do
@@ -63,7 +75,7 @@ runFile path debugParser exprOnly noStdLib = do
             True  -> parseFileExpr fileContent path
     case statements of
         Left e -> print e
-        Right sts -> runStatements sts state >> putStrLn "exiting!"
+        Right sts -> runStatements sts state >> return ()
 
 
 runAsRepl :: Bool -> Bool -> Bool -> RTState -> IO ()
@@ -71,6 +83,7 @@ runAsRepl debugParse noPrint exprOnly state = do
     input <- (fromMaybe "") <$> (runInputT (Settings completeFilename (Just "history.txt") True) $ (getInputLine "+> "))
     case input of
         "exit" -> return ()
+        ('!':cmd) -> callCommand cmd >> runAsRepl debugParse noPrint exprOnly state
         _ -> do
             let line = input ++ ";"
             let statements = case exprOnly of
@@ -84,6 +97,7 @@ runAsRepl debugParse noPrint exprOnly state = do
                             (state', isE) <- runStatements replSTS state
                             return state'
             runAsRepl debugParse noPrint exprOnly state'
+
 
 ioFuncs :: [String]
 ioFuncs = ["print", "put", "compIO", "exec"]
@@ -154,6 +168,7 @@ eval (FCall fx ax) state = case av of
     _ -> case eval fx state of
         (FuncV pn ex cls) -> eval ex (updateClosures (cls++) $ updateArgs (const [(pn, av)]) state)
         (NativeF f cls)   -> f av (updateClosures (cls++) state)
+        Exception et em   -> Exception et em
         _                 -> Exception "Type" "Tried to call a value that is not a function!"
     where av = eval ax state
 
@@ -165,7 +180,7 @@ eval (Var n) state       = case lookup n (getArgs state) <|> lookup n (getClosur
                                 ++ show (getClosures state)
 eval (If c th el) state  = case (eval c state) of
     BoolV False   -> eval el state
-    IntV 0        -> eval el state
+    NumV 0        -> eval el state
     NullV         -> eval el state
     ListV []      -> eval el state
     MapV []       -> eval el state
@@ -173,7 +188,7 @@ eval (If c th el) state  = case (eval c state) of
     _             -> eval th state
 
 eval (Literal l) state   = case l of
-    IntL x       -> IntV x
+    NumL x       -> NumV x
     CharL x      -> CharV x
     BoolL x      -> BoolV x
     NullL        -> NullV
@@ -197,7 +212,7 @@ showF :: RTValue -> RTState -> RTValue
 showF (ListV vs)    state = case rtVAsMStr (ListV vs) of
                           Just s -> (ListV $ map CharV $ '"':s++['"'])
                           Nothing -> showListRT vs state
-showF (IntV i)          state = strAsRTV $ show i
+showF (NumV i)          state = strAsRTV $ show i
 showF (BoolV b)         state = strAsRTV $ show b
 showF (NullV)           state = strAsRTV $ "Null"
 showF (NativeF _ _)     state = strAsRTV $ "<Function>"
@@ -244,28 +259,28 @@ addF = FuncV "x" (Value $ NativeF addFInner []) []
     where
         addFInner :: RTValue -> RTState -> RTValue
         addFInner y state = case (x, y) of
-            (IntV a,  IntV b)   -> (IntV $ a + b)
+            (NumV a,  NumV b)   -> (NumV $ a + b)
             (ListV a, ListV b)  -> (ListV $ a ++ b)
             (BoolV a, BoolV b)  -> (BoolV $ a || b)
             (NullV, x)          -> x
             (x, NullV)          -> x
             (x, y)              -> Exception "Type" $ "Cannot add the expressions '" ++ show x ++ "' and '" ++ show y ++ "'"
             where
-                x = fromMaybe (IntV $ -999) $ lookup "x" (getClosures state)
+                x = fromMaybe (NumV $ -999) $ lookup "x" (getClosures state)
 
 subF :: RTValue
 subF = FuncV "x" (Value $ NativeF subFInner []) []
     where
         subFInner :: RTValue -> RTState -> RTValue
         subFInner y state = case (x, y) of
-            (IntV a,  IntV b)   -> (IntV $ a - b)
+            (NumV a,  NumV b)   -> (NumV $ a - b)
             (ListV a, ListV b)  -> (ListV $ unique a b)
             (BoolV a, BoolV b)  -> (BoolV $ if b then False else a)
             --(NullV, x)          -> NullV
             (x, NullV)          -> x
             (x, y)              -> Exception "Type" $ "Cannot subtract the expressions '" ++ show x ++ "' and '" ++ show y ++ "'"
             where
-                x = fromMaybe (IntV $ -999) $ lookup "x" (getClosures state)
+                x = fromMaybe (NumV $ -999) $ lookup "x" (getClosures state)
 
 eqF :: RTValue
 eqF = FuncV "x" (Value $ NativeF eqFInner []) []
@@ -273,45 +288,45 @@ eqF = FuncV "x" (Value $ NativeF eqFInner []) []
         eqFInner :: RTValue -> RTState -> RTValue
         eqFInner y state = BoolV $ x == y
             where
-                x = fromMaybe (IntV $ -999) $ lookup "x" (getClosures state)
+                x = fromMaybe (NumV $ -999) $ lookup "x" (getClosures state)
 
 ordF :: RTValue
 ordF = FuncV "x" (Value $ NativeF ordFInner []) []
     where
         ordFInner :: RTValue -> RTState -> RTValue
         ordFInner y state = case (x, y) of
-            (IntV a, IntV b)     -> ordToRTInt (compare a b)
+            (NumV a, NumV b)     -> ordToRTInt (compare a b)
             (BoolV a, BoolV b)   -> ordToRTInt (compare a b)
             (CharV a, CharV b)   -> ordToRTInt (compare a b)
             (ListV xs, ListV ys) -> ordToRTInt (case compare (length xs) (length ys) of
                             EQ -> if xs == ys then EQ else LT
                             x -> x)
-            (NullV, NullV)       -> IntV 0
-            (NullV, _)           -> IntV $ -1
-            (_, NullV)           -> IntV 1
+            (NullV, NullV)       -> NumV 0
+            (NullV, _)           -> NumV $ -1
+            (_, NullV)           -> NumV 1
             (x, y)               -> Exception "Type" $ "cannot compare the values '" ++ show x ++ "' and '" ++ show y ++
                 "' because they are different types and neither of then is 'Null'"
             where
-                x = fromMaybe (IntV $ -999) $ lookup "x" (getClosures state)
+                x = fromMaybe (NumV $ -999) $ lookup "x" (getClosures state)
 
 ordToRTInt :: Ordering -> RTValue
-ordToRTInt LT = IntV $ -1
-ordToRTInt GT = IntV 1
-ordToRTInt EQ = IntV 0
+ordToRTInt LT = NumV $ -1
+ordToRTInt GT = NumV 1
+ordToRTInt EQ = NumV 0
 
 mulF :: RTValue
 mulF = FuncV "x" (Value $ NativeF mulFInner []) []
     where
         mulFInner :: RTValue -> RTState -> RTValue
         mulFInner y state = case (x, y) of
-            (IntV a,  IntV b)   -> (IntV $ a * b)
+            (NumV a,  NumV b)   -> (NumV $ a * b)
             --(ListV a, ListV b)  -> (ListV $ unique a b)
             --(BoolV a, BoolV b)  -> (BoolV $ if b then False else a)
             --(NullV, x)          -> NullV
             --(x, NullV)          -> x
             (x, y)              -> Exception "Type" $ "Cannot multiply the expressions '" ++ show x ++ "' and '" ++ show y ++ "'"
             where
-                x = fromMaybe (IntV $ -999) $ lookup "x" (getClosures state)
+                x = fromMaybe (NumV $ -999) $ lookup "x" (getClosures state)
 
 
 
@@ -338,7 +353,7 @@ typeofF :: RTValue -> RTState -> RTValue
 typeofF (IOV _)         state = strAsRTV "IO"
 typeofF (CharV _)       state = strAsRTV "Char"
 typeofF (ListV _)       state = strAsRTV "List"
-typeofF (IntV _)        state = strAsRTV "Int"
+typeofF (NumV _)        state = strAsRTV "Num"
 typeofF (BoolV _)       state = strAsRTV "Bool"
 typeofF (FuncV _ _ _)   state = strAsRTV "Function"
 typeofF (NativeF _ _)   state = strAsRTV "Function"
@@ -354,7 +369,7 @@ consF = FuncV "x" (Value $ NativeF consInner []) []
             ListV l -> ListV (x:l)
             x       -> Exception "Type" $ "cons needs its second argument to be of type List. The value '" ++ show x ++ "' is not a List!"
             where
-                x = fromMaybe (IntV $ -999) $ lookup "x" (getClosures state)
+                x = fromMaybe (NumV $ -999) $ lookup "x" (getClosures state)
 
 
 getF :: RTValue
@@ -367,7 +382,7 @@ getF = FuncV "n" (Value $ NativeF getInner []) []
                 Just s  -> fromMaybe NullV $ lookup s m
             x -> Exception "Type" $ "get needs its second argument to be of type Map. The value '" ++ show x ++ "' is not a Map!"
             where
-                n = fromMaybe (IntV $ -999) $ lookup "n" (getClosures state)
+                n = fromMaybe (NumV $ -999) $ lookup "n" (getClosures state)
 
 setF :: RTValue
 setF = FuncV "n" (Literal (LambdaL "x" (Value $ NativeF setInner []))) []
@@ -379,8 +394,8 @@ setF = FuncV "n" (Literal (LambdaL "x" (Value $ NativeF setInner []))) []
                 Just s  -> MapV $ setAL s x m
             x -> Exception "Type" $ "set needs its second argument to be of type Map. The value '" ++ show x ++ "' is not a Map!"
             where
-                n = fromMaybe (IntV $ -999) $ lookup "n" (getClosures state)
-                x = fromMaybe (IntV $ -777) $ lookup "x" (getClosures state)
+                n = fromMaybe (NumV $ -999) $ lookup "n" (getClosures state)
+                x = fromMaybe (NumV $ -777) $ lookup "x" (getClosures state)
 
 
 setAL :: (Eq k) => k -> v -> [(k, v)] -> [(k, v)]
@@ -398,7 +413,7 @@ compIOF = FuncV "io" (Value $ NativeF compInner []) []
             IOV a -> IOV $ Composed a f
             x -> Exception "Type" $ "compIO needs its first argument to be an IO action. '" ++ show x ++ "' is not an IO action!"
             where
-                io = fromMaybe (IntV $ -999) $ lookup "io" (getClosures state)
+                io = fromMaybe (NumV $ -999) $ lookup "io" (getClosures state)
 
 readLineF :: RTValue
 readLineF = IOV ReadLine
@@ -409,7 +424,7 @@ throwF = FuncV "type" (Value $ NativeF throwInner []) []
         throwInner :: RTValue -> RTState -> RTValue
         throwInner name state = Exception (rtVAsMStr typen |> fromMaybe "Unknown") (rtVAsMStr name |> fromMaybe "Unknown")
             where
-                typen = fromMaybe (IntV $ -999) $ lookup "type" (getClosures state)
+                typen = fromMaybe (NumV $ -999) $ lookup "type" (getClosures state)
 
 
 (|>) :: a -> (a -> b) -> b
