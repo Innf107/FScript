@@ -1,4 +1,3 @@
-{-# LANGUAGE FlexibleInstances #-}
 module Main where
 
 import Lib
@@ -15,7 +14,7 @@ import Data.Either as E
 import Text.Parsec.Error (ParseError)
 import Text.Read (readEither)
 import System.Console.Haskeline
-import Data.Char (ord)
+import Data.Char
 
 updateVals :: ([(String, RTValue)] -> [(String, RTValue)]) -> RTState -> RTState
 updateVals f state = RTState {getVals=f(getVals state), getArgs=getArgs state, getClosures = (getClosures state)}
@@ -36,7 +35,8 @@ nativeFs = (\(x, y) -> (x, NativeF y [])) <$> [("put", putF), ("show", showF), (
     ("tail", tailF), ("exec", execF), ("typeof", typeofF)]
 
 nativeVals :: [(String, RTValue)]
-nativeVals = [("add", addF), ("sub", subF), ("ord", ordF), ("mul", mulF), ("cons", consF)]
+nativeVals = [("add", addF), ("sub", subF), ("ord", ordF), ("mul", mulF), ("cons", consF), ("get", getF), ("set", setF),
+              ("compIO", compIOF), ("readLine", readLineF), ("throw", throwF)]
 
 main :: IO ()
 main = do
@@ -50,14 +50,14 @@ main = do
         case repl of
             True -> do
                 putStrLn "Running FScript v2.0 in Repl mode."
-                state <- if noStdLib then return emptyState else runStatement (Import "stdlib") emptyState
+                state <- if noStdLib then return emptyState else fst <$> runStatement (Import "stdlib" All False) emptyState
                 runAsRepl debugParse noPrint exprOnly state
             False -> runFile filePath debugParse exprOnly noStdLib
 
 runFile :: String -> Bool -> Bool -> Bool -> IO ()
 runFile path debugParser exprOnly noStdLib = do
     fileContent <- readFile path
-    state <- if noStdLib then return emptyState else runStatement (Import "stdlib") emptyState
+    state <- if noStdLib then return emptyState else fst <$> runStatement (Import "stdlib" All False) emptyState
     let statements = case exprOnly of
             False -> parseFile fileContent path
             True  -> parseFileExpr fileContent path
@@ -65,22 +65,28 @@ runFile path debugParser exprOnly noStdLib = do
         Left e -> print e
         Right sts -> runStatements sts state >> putStrLn "exiting!"
 
+
 runAsRepl :: Bool -> Bool -> Bool -> RTState -> IO ()
 runAsRepl debugParse noPrint exprOnly state = do
-    line <- ((++";") . fromMaybe "") <$> (runInputT defaultSettings $ getInputLine "+> ")
-    let statements = case exprOnly of
-            False -> parseAsRepl line
-            True  -> parseAsReplExpr line
-    state' <- case statements of
-                Left e -> print e >> return state
-                Right sts -> do
-                    let replSTS = if noPrint then sts else map statementAsRepl sts
-                    when debugParse $ print replSTS
-                    runStatements replSTS state
-    runAsRepl debugParse noPrint exprOnly state'
+    input <- (fromMaybe "") <$> (runInputT (Settings completeFilename (Just "history.txt") True) $ (getInputLine "+> "))
+    case input of
+        "exit" -> return ()
+        _ -> do
+            let line = input ++ ";"
+            let statements = case exprOnly of
+                    False -> parseAsRepl line
+                    True  -> parseAsReplExpr line
+            state' <- case statements of
+                        Left e -> print e >> return state
+                        Right sts -> do
+                            let replSTS = if noPrint then sts else map statementAsRepl sts
+                            when debugParse $ print replSTS
+                            (state', isE) <- runStatements replSTS state
+                            return state'
+            runAsRepl debugParse noPrint exprOnly state'
 
 ioFuncs :: [String]
-ioFuncs = ["print", "put"]
+ioFuncs = ["print", "put", "compIO", "exec"]
 
 statementAsRepl :: Statement -> Statement
 statementAsRepl (Run (FCall (Var f) ex))
@@ -88,25 +94,37 @@ statementAsRepl (Run (FCall (Var f) ex))
 statementAsRepl (Run ex) = Run (FCall (Var "print") ex)
 statementAsRepl x = x
 
-runStatements :: [Statement] -> RTState -> IO RTState
-runStatements [] state      = return state
+runStatements :: [Statement] -> RTState -> IO (RTState, Bool)
+runStatements [] state      = return (state, False)
 runStatements (s:sts) state = do
-    state' <- runStatement s state
-    runStatements sts state'
+    (state', isException) <- runStatement s state
+    if isException then return (state, True)
+    else runStatements sts state'
 
-runStatement :: Statement -> RTState -> IO RTState
-runStatement NOP state = return state
-runStatement (Import m) state = runImport m state
-runStatement (Def n e) state  = return $ updateVals ((n, eval e state):) state
-runStatement (Run e) state = case eval e state of
-    (IOV a) -> runIOAction a >> return state
-    _       -> putStrLn "Can only run values of type IO!" >> return state
+runStatement :: Statement -> RTState -> IO (RTState, Bool)
+runStatement NOP                state = return (state, False)
+runStatement (Import m iType q) state = (\x -> (x, False)) <$> runImport m iType q state
+runStatement (Def n e)          state = return $ (updateVals ((n, eval e state):) state, False)
+runStatement (Run e)            state = case eval e state of
+    (IOV a)                     -> runIOAction a state >> return (state, False)
+    (Exception eType eMsg)      -> (putStrLn $ eType  ++ " Exception: '" ++ eMsg ++ "'") >> return (state, True)
+    _                           -> putStrLn "Can only run values of type IO!" >> return (state, False)
 
-runIOAction :: IOAction -> IO ()
-runIOAction (Print s) = putStrLn s
+runIOAction :: IOAction -> RTState -> IO ()
+runIOAction (Print s) state      = putStrLn s
+runIOAction (ReadLine) state     = getLine >> return ()
+runIOAction (Composed a f) state = case a of
+    Print s -> putStrLn s >> tryRun (FCall (Value f) (Value NullV))
+    ReadLine -> do
+                    line <- getLine
+                    let lv = strAsRTV line
+                    tryRun $ FCall (Value f) (Value lv)
+    where tryRun ex = case eval ex state of
+                       IOV a -> runIOAction a state
+                       x     -> putStrLn $ "IO actions can only be composed with Functions that return other IO actions. '" ++ show x ++ "is not an IO action"
 
-runImport :: String -> RTState -> IO RTState
-runImport path state = do
+runImport :: String -> ImportType -> Bool -> RTState -> IO RTState
+runImport path iType isQualified state = do
     let file = path ++ ".fscript"
     exists <- doesFileExist file
     case exists of
@@ -115,28 +133,44 @@ runImport path state = do
             content <- readFile file
             case (parseFile content path) of
                 Left e -> print e >> return state
-                Right sts -> putStrLn ("Importing module at path '" ++ file ++ "'...") >> runStatements sts state
+                Right sts -> do
+                    putStrLn ("Importing module at path '" ++ file ++ "'...")
+                    case iType of
+                        All          -> do (state', isE) <- runStatements sts' state
+                                           return state'
+                        Exposing ids -> let isExposed (Def did dex) = did `elem` (if isQualified then ((path++".")++) <$> ids else ids)
+                                        in fst <$> (runStatements (filter isExposed sts') state)
 
+
+                        where isDef (Def did dex) = True
+                              isDef _ = False
+                              sts' = (\(Def did dex) -> if isQualified then Def (path ++ "." ++ did) dex else Def did dex) <$> filter isDef sts
 
 eval :: Expr -> RTState -> RTValue
-eval (Value (NativeF f cls)) state = NativeF f ((getArgs state)++cls)
+eval (Value (NativeF f cls)) state = NativeF f ((getArgs state)++(getClosures state)++cls)
 eval (Value val)   state = val
-eval (FCall fx ax) state = case eval fx state of
-        (FuncV pn ex cls) -> eval ex (updateClosures (cls++) $ updateArgs (const [(pn, eval ax state)]) state)
-        (NativeF f cls)   -> f (eval ax state) (updateClosures (cls++) state)
-        _                 -> error "Tried to call a value that is not a function!"
+eval (FCall fx ax) state = case av of
+    Exception eType eMsg -> Exception eType eMsg
+    _ -> case eval fx state of
+        (FuncV pn ex cls) -> eval ex (updateClosures (cls++) $ updateArgs (const [(pn, av)]) state)
+        (NativeF f cls)   -> f av (updateClosures (cls++) state)
+        _                 -> Exception "Type" "Tried to call a value that is not a function!"
+    where av = eval ax state
+
 eval (Let n vx ex) state = eval ex (updateArgs ((n, eval vx state):) state)
-eval (Var n) state       = case lookup n (getVals state) <|> lookup n (getArgs state) <|> lookup n (getClosures state) of
+eval (Var n) state       = case lookup n (getArgs state) <|> lookup n (getClosures state) <|> lookup n (getVals state) of
                             Just x  -> x
-                            Nothing -> error $ "Value " ++ n ++ " does not exist in the current state! \n\nCurrent Args were: " ++ 
+                            Nothing -> Exception "State" $ "Value " ++ n ++ " does not exist in the current state! \n\nCurrent Args were: " ++
                                 show (getArgs state) ++ "\n\nClosures were: "
                                 ++ show (getClosures state)
 eval (If c th el) state  = case (eval c state) of
-    BoolV False -> eval el state
-    IntV 0      -> eval el state
-    NullV       -> eval el state
-    ListV []    -> eval el state
-    _           -> eval th state
+    BoolV False   -> eval el state
+    IntV 0        -> eval el state
+    NullV         -> eval el state
+    ListV []      -> eval el state
+    MapV []       -> eval el state
+    Exception t m -> Exception t m
+    _             -> eval th state
 
 eval (Literal l) state   = case l of
     IntL x       -> IntV x
@@ -145,7 +179,7 @@ eval (Literal l) state   = case l of
     NullL        -> NullV
     ListL xps    -> ListV $ (`eval` state) <$> xps
     LambdaL n xp -> FuncV n xp (getArgs state ++ getClosures state)
-
+    MapL xps     -> MapV $ (\(x, y) -> (x, eval y state)) <$> xps
 
 -- f = \x -> \y -> x
 -- FuncV "x" (Literal (LambdaL "y" (Var "x"))) []
@@ -163,13 +197,16 @@ showF :: RTValue -> RTState -> RTValue
 showF (ListV vs)    state = case rtVAsMStr (ListV vs) of
                           Just s -> (ListV $ map CharV $ '"':s++['"'])
                           Nothing -> showListRT vs state
-showF (IntV i)      state = strAsRTV $ show i
-showF (BoolV b)     state = strAsRTV $ show b
-showF (NullV)       state = strAsRTV $ "Null"
-showF (NativeF _ _) state = strAsRTV $ "<Function>"
-showF (FuncV _ _ _) state = strAsRTV $ "<Function>"
-showF (IOV _)       state = strAsRTV $ "<IO>"
-showF (CharV c)     state = ListV [CharV '\'', CharV c, CharV '\'']
+showF (IntV i)          state = strAsRTV $ show i
+showF (BoolV b)         state = strAsRTV $ show b
+showF (NullV)           state = strAsRTV $ "Null"
+showF (NativeF _ _)     state = strAsRTV $ "<Function>"
+showF (FuncV _ _ _)     state = strAsRTV $ "<Function>"
+showF (IOV _)           state = strAsRTV $ "<IO>"
+showF (CharV c)         state = ListV [CharV '\'', CharV c, CharV '\'']
+showF (MapV xps)        state = strAsRTV $ "{" ++ intercalate ", " ((\(n, v) -> n ++ ": " ++ (rtVAsStr $ showF v state)) <$> xps) ++ "}"
+showF (Exception eT en) state = strAsRTV $ eT ++ " Exception: '" ++ en ++ "'"
+showF x                 state = Exception "Type" $ "Cannot call showF on the expression '" ++ show x ++ "'"
 
 showListRT :: [RTValue] -> RTState -> RTValue
 showListRT vs state = strAsRTV $ "[" ++ showListRTInner vs ++ "]"
@@ -181,7 +218,7 @@ showListRT vs state = strAsRTV $ "[" ++ showListRTInner vs ++ "]"
 
 putF :: RTValue -> RTState -> RTValue
 putF (ListV vs) state = IOV $ Print $ rtVAsStr (ListV vs)
-putF _ state = error $ "'put' only works with strings. Use 'print' if you want to print other types"
+putF _ state = Exception "Type" $ "'put' only works with strings. Use 'print' if you want to print other types"
 
 rtVAsStr :: RTValue -> String
 rtVAsStr (ListV vs) = map rtVAsChar vs
@@ -212,7 +249,7 @@ addF = FuncV "x" (Value $ NativeF addFInner []) []
             (BoolV a, BoolV b)  -> (BoolV $ a || b)
             (NullV, x)          -> x
             (x, NullV)          -> x
-            (x, y)              -> error $ "Cannot add the expressions '" ++ show x ++ "' and '" ++ show y ++ "'"
+            (x, y)              -> Exception "Type" $ "Cannot add the expressions '" ++ show x ++ "' and '" ++ show y ++ "'"
             where
                 x = fromMaybe (IntV $ -999) $ lookup "x" (getClosures state)
 
@@ -226,7 +263,7 @@ subF = FuncV "x" (Value $ NativeF subFInner []) []
             (BoolV a, BoolV b)  -> (BoolV $ if b then False else a)
             --(NullV, x)          -> NullV
             (x, NullV)          -> x
-            (x, y)              -> error $ "Cannot subtract the expressions '" ++ show x ++ "' and '" ++ show y ++ "'"
+            (x, y)              -> Exception "Type" $ "Cannot subtract the expressions '" ++ show x ++ "' and '" ++ show y ++ "'"
             where
                 x = fromMaybe (IntV $ -999) $ lookup "x" (getClosures state)
 
@@ -246,11 +283,13 @@ ordF = FuncV "x" (Value $ NativeF ordFInner []) []
             (IntV a, IntV b)     -> ordToRTInt (compare a b)
             (BoolV a, BoolV b)   -> ordToRTInt (compare a b)
             (CharV a, CharV b)   -> ordToRTInt (compare a b)
-            (ListV xs, ListV ys) -> ordToRTInt (compare (length xs) (length ys))
+            (ListV xs, ListV ys) -> ordToRTInt (case compare (length xs) (length ys) of
+                            EQ -> if xs == ys then EQ else LT
+                            x -> x)
             (NullV, NullV)       -> IntV 0
             (NullV, _)           -> IntV $ -1
             (_, NullV)           -> IntV 1
-            (x, y)               -> error $ "cannot compare the values '" ++ show x ++ "' and '" ++ show y ++
+            (x, y)               -> Exception "Type" $ "cannot compare the values '" ++ show x ++ "' and '" ++ show y ++
                 "' because they are different types and neither of then is 'Null'"
             where
                 x = fromMaybe (IntV $ -999) $ lookup "x" (getClosures state)
@@ -270,7 +309,7 @@ mulF = FuncV "x" (Value $ NativeF mulFInner []) []
             --(BoolV a, BoolV b)  -> (BoolV $ if b then False else a)
             --(NullV, x)          -> NullV
             --(x, NullV)          -> x
-            (x, y)              -> error $ "Cannot multiply the expressions '" ++ show x ++ "' and '" ++ show y ++ "'"
+            (x, y)              -> Exception "Type" $ "Cannot multiply the expressions '" ++ show x ++ "' and '" ++ show y ++ "'"
             where
                 x = fromMaybe (IntV $ -999) $ lookup "x" (getClosures state)
 
@@ -283,27 +322,29 @@ headF :: RTValue -> RTState -> RTValue
 headF x state = case x of
     ListV []    -> NullV
     ListV (x:_) -> x
-    x           -> error $ "'head' needs its argument to be a list. '" ++ show x ++ "' is not a List!"
+    x           -> Exception "Type" $ "'head' needs its argument to be a list. '" ++ show x ++ "' is not a List!"
 
 tailF :: RTValue -> RTState -> RTValue
 tailF x state = case x of
     ListV []     -> NullV
     ListV (_:xs) -> ListV xs
-    x            -> error $ "'tail' needs its argument to be a list. '" ++ show x ++ "' is not a List!"
+    x            -> Exception "Type" $ "'tail' needs its argument to be a list. '" ++ show x ++ "' is not a List!"
 
 execF :: RTValue -> RTState -> RTValue
 execF (IOV a) state = IOV a
-execF x       state = error $ "Can only run 'exec' on values of type IO. '" ++ show x ++ "' does not have the type IO!"
+execF x       state = Exception "Type" $ "Can only run 'exec' on values of type IO. '" ++ show x ++ "' does not have the type IO!"
 
 typeofF :: RTValue -> RTState -> RTValue
-typeofF (IOV _)       state = strAsRTV "IO"
-typeofF (CharV _)     state = strAsRTV "Char"
-typeofF (ListV _)     state = strAsRTV "List"
-typeofF (IntV _)      state = strAsRTV "Int"
-typeofF (BoolV _)     state = strAsRTV "Bool"
-typeofF (FuncV _ _ _) state = strAsRTV "Function"
-typeofF (NativeF _ _) state = strAsRTV "Function"
-typeofF (NullV)       state = strAsRTV "Null"
+typeofF (IOV _)         state = strAsRTV "IO"
+typeofF (CharV _)       state = strAsRTV "Char"
+typeofF (ListV _)       state = strAsRTV "List"
+typeofF (IntV _)        state = strAsRTV "Int"
+typeofF (BoolV _)       state = strAsRTV "Bool"
+typeofF (FuncV _ _ _)   state = strAsRTV "Function"
+typeofF (NativeF _ _)   state = strAsRTV "Function"
+typeofF (NullV)         state = strAsRTV "Null"
+typeofF (MapV _)        state = strAsRTV "Map"
+typeofF (Exception _ _) state = strAsRTV "Exception"
 
 consF :: RTValue
 consF = FuncV "x" (Value $ NativeF consInner []) []
@@ -311,7 +352,65 @@ consF = FuncV "x" (Value $ NativeF consInner []) []
         consInner :: RTValue -> RTState -> RTValue
         consInner xs state = case xs of
             ListV l -> ListV (x:l)
-            x       -> error $ "cons needs its second argument to be of type List. The value '" ++ show x ++ "' is not a List!"
+            x       -> Exception "Type" $ "cons needs its second argument to be of type List. The value '" ++ show x ++ "' is not a List!"
             where
                 x = fromMaybe (IntV $ -999) $ lookup "x" (getClosures state)
 
+
+getF :: RTValue
+getF = FuncV "n" (Value $ NativeF getInner []) []
+    where
+        getInner :: RTValue -> RTState -> RTValue
+        getInner ms state = case ms of
+            MapV m -> case rtVAsMStr n of
+                Nothing -> Exception "Type" $ "get needs its first argument to be of type String. The value '" ++ show n ++ "' is not a String!"
+                Just s  -> fromMaybe NullV $ lookup s m
+            x -> Exception "Type" $ "get needs its second argument to be of type Map. The value '" ++ show x ++ "' is not a Map!"
+            where
+                n = fromMaybe (IntV $ -999) $ lookup "n" (getClosures state)
+
+setF :: RTValue
+setF = FuncV "n" (Literal (LambdaL "x" (Value $ NativeF setInner []))) []
+    where
+        setInner :: RTValue -> RTState -> RTValue
+        setInner ms state = case ms of
+            MapV m -> case rtVAsMStr n of
+                Nothing -> Exception "Type" $ "set needs its first argument to be of type String. The value '" ++ show n ++ "' is not a String!"
+                Just s  -> MapV $ setAL s x m
+            x -> Exception "Type" $ "set needs its second argument to be of type Map. The value '" ++ show x ++ "' is not a Map!"
+            where
+                n = fromMaybe (IntV $ -999) $ lookup "n" (getClosures state)
+                x = fromMaybe (IntV $ -777) $ lookup "x" (getClosures state)
+
+
+setAL :: (Eq k) => k -> v -> [(k, v)] -> [(k, v)]
+setAL k v []     = [(k, v)]
+setAL k v ((k', v'):xs)
+    | k == k'    = ((k, v):xs)
+    | otherwise  = ((k', v'):(setAL k v xs))
+
+
+compIOF :: RTValue
+compIOF = FuncV "io" (Value $ NativeF compInner []) []
+    where
+        compInner :: RTValue -> RTState -> RTValue
+        compInner f state = case io of
+            IOV a -> IOV $ Composed a f
+            x -> Exception "Type" $ "compIO needs its first argument to be an IO action. '" ++ show x ++ "' is not an IO action!"
+            where
+                io = fromMaybe (IntV $ -999) $ lookup "io" (getClosures state)
+
+readLineF :: RTValue
+readLineF = IOV ReadLine
+
+throwF :: RTValue
+throwF = FuncV "type" (Value $ NativeF throwInner []) []
+    where
+        throwInner :: RTValue -> RTState -> RTValue
+        throwInner name state = Exception (rtVAsMStr typen |> fromMaybe "Unknown") (rtVAsMStr name |> fromMaybe "Unknown")
+            where
+                typen = fromMaybe (IntV $ -999) $ lookup "type" (getClosures state)
+
+
+(|>) :: a -> (a -> b) -> b
+x |> f = f x

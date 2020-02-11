@@ -15,10 +15,14 @@ import Data.Either
 import Lib
 
 data Statement = NOP
-               | Import String
+               | Import String ImportType Bool
                | Def String Expr
                | Run Expr
                deriving (Show, Eq, Read)
+
+data ImportType = All
+                | Exposing [String]
+    deriving (Show, Eq, Read)
 
 data Expr = Literal Lit
           | Let String Expr Expr
@@ -34,6 +38,7 @@ data Lit = IntL Integer
          | BoolL Bool
          | NullL
          | LambdaL String Expr
+         | MapL [(String, Expr)]
          deriving (Show, Eq, Read)
 
 data RTValue = IntV Integer
@@ -44,11 +49,16 @@ data RTValue = IntV Integer
              | FuncV String Expr [(String, RTValue)]
              | NativeF (RTValue -> RTState -> RTValue) [(String, RTValue)]
              | NullV
+             | MapV [(String, RTValue)]
+             | Exception String String
              deriving (Show, Eq, Read)
 
 data RTState = RTState {getVals::[(String, RTValue)], getArgs::[(String, RTValue)], getClosures::[(String, RTValue)]} deriving (Show, Eq)
 
-newtype IOAction = Print String deriving (Show, Eq, Read)
+data IOAction = Print String
+              | ReadLine 
+              | Composed IOAction RTValue
+              deriving (Show, Eq, Read)
 
 instance Show (RTValue -> RTState -> RTValue) where
     show _ = "(RTValue -> RTState -> RTValue)"
@@ -73,10 +83,11 @@ parseAsReplExpr = fmap (map Run) . parse (many (expr)) "REPL"
 
 -- Identifier
 reservedIDs :: [String]
-reservedIDs = ["if", "then", "else", "import", "let", "in"]
+reservedIDs = ["if", "then", "else", "import", "exposing", "qualified", "let", "in"]
 
 identifier :: Parser String
-identifier = noPof (string <$> reservedIDs) (many1 alphaNum)
+identifier = noPof (string <$> reservedIDs) (do {x <- letter; xs <- many (alphaNum <|> oneOf "._"); return (x:xs)})
+
 
 -- Statement
 statement :: Parser Statement
@@ -102,8 +113,22 @@ importS :: Parser Statement
 importS = do
     string "import"
     spaces
+    isQ <- option False (const True <$> string "qualified")
+    spaces
     mname <- identifier
-    return $ Import mname
+    spaces
+    it <- importTypeS
+    return $ Import mname it isQ
+
+importTypeS :: Parser ImportType
+importTypeS = try exposingI <|> return All
+
+exposingI :: Parser ImportType
+exposingI = do
+    string "exposing"
+    spaces
+    ids <- sepBy identifier (char ',' >> spaces)
+    return $ Exposing ids
 
 defS :: Parser Statement
 defS = do
@@ -226,7 +251,7 @@ fcallE = do
 
 -- Literals
 litE :: Parser Expr
-litE = Literal <$> (try spaces >> (intL <|> boolL <|> nullL <|> charL <|> listL <|> stringL <|> lambdaL))
+litE = Literal <$> (try spaces >> (intL <|> boolL <|> nullL <|> charL <|> listL <|> stringL <|> lambdaL <|> mapL))
 
 intL :: Parser Lit
 intL = do
@@ -282,3 +307,23 @@ lambdaL = do
     e <- expr
     return $ LambdaL param e
 
+mapL :: Parser Lit
+mapL = do
+    char '{'
+    spaces
+    elems <- (flip sepBy) (char ',')  (do 
+            spaces
+            name <- identifier <|> do
+                char '"'
+                x <- identifier
+                char '"'
+                return x
+            spaces
+            char ':'
+            spaces
+            val <- expr
+            spaces
+            return (name, val))
+    spaces
+    char '}'
+    return $ MapL elems

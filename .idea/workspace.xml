@@ -51,7 +51,7 @@
     <property name="RunOnceActivity.ShowReadmeOnStart" value="true" />
     <property name="WebServerToolWindowFactoryState" value="false" />
     <property name="org.rust.cargo.project.model.PROJECT_DISCOVERY" value="true" />
-    <property name="settings.editor.selected.configurable" value="preferences.sourceCode.Haskell" />
+    <property name="settings.editor.selected.configurable" value="preferences.fileTypes" />
   </component>
   <component name="ServiceViewManager">
     <option name="viewStates">
@@ -81,6 +81,9 @@
       <workItem from="1579627438622" duration="7000" />
       <workItem from="1579696680341" duration="16307000" />
       <workItem from="1580147501068" duration="196000" />
+      <workItem from="1581271275137" duration="1357000" />
+      <workItem from="1581272644769" duration="11311000" />
+      <workItem from="1581431668603" duration="7995000" />
     </task>
     <servers />
   </component>
@@ -89,18 +92,22 @@
       <screen x="0" y="34" width="1920" height="1046" />
     </state>
     <state x="652" y="362" width="606" height="388" key="#com.intellij.fileTypes.FileTypeChooser/0.34.1920.1046/1920.0.1680.1050@0.34.1920.1046" timestamp="1579609406290" />
-    <state x="449" y="192" key="SettingsEditor" timestamp="1579372778191">
+    <state x="643" y="285" width="624" height="542" key="#com.intellij.openapi.updateSettings.impl.PluginUpdateInfoDialog" timestamp="1581431816478">
       <screen x="0" y="34" width="1920" height="1046" />
     </state>
-    <state x="449" y="192" key="SettingsEditor/0.34.1920.1046/1920.0.1680.1050@0.34.1920.1046" timestamp="1579372778191" />
+    <state x="643" y="285" width="624" height="542" key="#com.intellij.openapi.updateSettings.impl.PluginUpdateInfoDialog/0.34.1920.1046/1920.0.1680.1050@0.34.1920.1046" timestamp="1581431816478" />
+    <state x="506" y="87" key="SettingsEditor" timestamp="1581439848494">
+      <screen x="0" y="34" width="1920" height="1046" />
+    </state>
+    <state x="506" y="87" key="SettingsEditor/0.34.1920.1046/1920.0.1680.1050@0.34.1920.1046" timestamp="1581439848494" />
     <state x="689" y="292" width="540" height="524" key="StructurePopup" timestamp="1579379194008">
       <screen x="0" y="34" width="1920" height="1046" />
     </state>
     <state x="689" y="292" width="540" height="524" key="StructurePopup/0.34.1920.1046/1920.0.1680.1050@0.34.1920.1046" timestamp="1579379194008" />
-    <state x="616" y="383" key="com.intellij.ide.util.TipDialog" timestamp="1580147691473">
+    <state x="616" y="383" key="com.intellij.ide.util.TipDialog" timestamp="1581431669074">
       <screen x="0" y="34" width="1920" height="1046" />
     </state>
-    <state x="616" y="383" key="com.intellij.ide.util.TipDialog/0.34.1920.1046/1920.0.1680.1050@0.34.1920.1046" timestamp="1580147691473" />
+    <state x="616" y="383" key="com.intellij.ide.util.TipDialog/0.34.1920.1046/1920.0.1680.1050@0.34.1920.1046" timestamp="1581431669074" />
     <state x="402" y="141" width="1106" height="830" key="com.intellij.openapi.editor.actions.MultiplePasteAction$ClipboardContentChooser" timestamp="1579614384063">
       <screen x="0" y="34" width="1920" height="1046" />
     </state>

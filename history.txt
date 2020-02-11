@@ -1,0 +1,100 @@
+sdiofjsdf
+!clear
+test.y
+test.y
+test.y
+test.y
+test.y
+test.y
+test.y
+test.x
+test.z
+test.x
+y
+z
+x
+import qualified test exposing y
+test.z
+test.y
+test.x
+y
+x
+import qualified test
+add x y
+add x z
+z
+x
+y
+import test exposing x, z
+z
+y
+x
+z
+y
+x
+import test
+import test exposing y
+y
+x
+import test exposing x
+y
+x
+import test
+test.x
+test.y
+y
+x
+test.x
+import qualified test exposing x
+import qualified test exposing x
+test.x
+x
+import qualified test
+y
+x
+import test exposing x
+test.x
+import qualified test
+test.x
+import qualified test exposing x
+x
+test.x
+import qualified test
+test
+test
+x
+test.x
+import qualified test exposing x
+x
+test.x
+import qualified test exposing x
+import qualified test
+import test
+:asd
+:state
+test.x
+test.y
+test.x
+x
+import qualified test exposing x
+test.y
+test.x
+x
+import qualified test
+y
+x
+y
+x
+import test exposing x, y
+x
+import test exposing x
+y
+x
+import test
+x.y
+x.y = 5
+y
+x
+import test exposing x
+x
+y

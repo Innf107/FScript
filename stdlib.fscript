@@ -50,3 +50,29 @@ length = \l -> if l
     else 0;
 
 null = eq [];
+
+
+getAt = \n -> \l -> let x = head l in let xs = tail l in
+    if n
+        then getAt (sub n 1) xs
+        else x;
+
+
+-- Association Lists
+getAL = \k -> \l -> let x = head l in let xs = tail l in
+    let kk = head x in
+    if eq k kk
+        then getAt 1 x
+        else getAL k xs;
+
+setAL = \k -> \v -> \l -> if l
+    then let x = head l in let xs = tail l in
+        let kk = head x in
+        if eq k kk
+            then cons [k, v] xs
+            else cons x (setAL k v xs)
+    else [[k, v]];
+
+
+-- IO
+compIOForever = \a -> \f -> compIO a (\x -> compIO (f x) (\y -> compIOForever a f));
