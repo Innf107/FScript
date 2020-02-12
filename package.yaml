@@ -25,6 +25,8 @@ dependencies:
 - directory
 - haskeline
 - process
+- ansi-terminal
+- split
 
 library:
   source-dirs: src

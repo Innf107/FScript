@@ -1,0 +1,41 @@
+--type Ratio = {
+--  enum: Num,
+--  denom: Num
+--}
+
+ratio = \e -> \d -> {
+        enum: e,
+        denom: d
+    };
+
+mapEnum = \f -> \r -> {
+        enum: f (get "enum" r),
+        denom: get "denom" r
+    };
+
+mapDenom = \f -> \r -> {
+        enum: get "enum" r,
+        denom: f (get "denom" r)
+    };
+
+mapBoth = \f -> \g -> \r -> {
+        enum: f (get "enum" r),
+        denom: g (get "denom" r)
+    };
+
+% = ratio;
+
+shorten = \r -> let gd = gcd (get "enum" r) (get "denom" r) in
+    mapBoth (divBy gd) (divBy gd) r;
+
+eqR = \r1 -> \r2 -> (shorten r1) == (shorten r2);
+
+<==> = eqR;
+
+<*> = \r1 -> \r2 -> shorten (mapBoth (* (get "enum" r2)) (* (get "denom" r2)) r1);
+
+invert = \r -> ratio (get "denom" r) (get "enum" r);
+
+</> = \r1 -> \r2 -> r1 <*> (invert r2);
+
+showR = \r -> let r_ = shorten r in "(" + (show (get "enum" r_)) + "/" + (show (get "denom" r_)) + ")";

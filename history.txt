@@ -1,100 +1,100 @@
-10+23.5
-10+23.5
-324
-095435
-ß1823
-32048284
-0017234731240783124079832107984208134
-3^25
-10^10
-1e100
-1e10
-1e3
-1e3
-3E3
-4.3e6
-3e7
-3.213
-3.5
-8
-2
-1
-6
-5
+Ratio.<==>
+import qualified stdlib/experimental/Ratio exposing <==>
+Ratio.<==>
+Ratio.ratio
+import qualified stdlib/experimental/Ratio exposing ratio
+Ratio.ratio
+ratio
+import qualified stdlib/experimental/Ratio exposing ratio
+Ratio.ratio
+Ratio.fscript.5
+Ratio.ratio
+import qualified stdlib/experimental/Ratio
+(1 % 3) <==> (3 % 9)
+(1 % 3) == (3 % 9)
+(5 % 4) </> (2 % 25)
+5 % 4
+import stdlib/experimental/Ratio
+x
+x = 5
+x
+x = 5
+0 <= -1
+0 <= 1
+0 <= 0
+5 <= 4
+5 <= 6
+5 <= 5
+(\x -> x * x) $ 5
+(\x -> x * x) <| 5
+1::21
+1::+19
+1::20
+1::19
+1::+19
+showR (5 % 85)
+import stdlib/experimental/Ratio
+showR (shorten (5 % 85))
+showR (5 % 85)
+import stdlib/experimental/Ratio
+showR (5 % 85)
+import stdlib/experimental/Ratio
+showR (5 % 89)
+showR (5 % 89)
+import stdlib/experimental/Ratio
+(9 % 213143) </> (2 % 19213)
+(9 % 213143) </> (2 % 1)
+(9 % 213143) / (2 % 1)
+(9 % 213143) / 2
+9 % 213143
+3 % 4
+import stdlib/experimental/Ratio
+fromNum 3
+fromNum 3
+3 % 4
+import stdlib/experimental/Ratio
+3 % 4
+(ratio 3 1) </> (ratio 5 4)
+import stdlib/experimental/Ratio
+(ratio 3 1) </> (ratio 5 4)
+(ratio 3 1) </> (5 4)
+(ratio 3 1) (5 4)
+import stdlib/experimental/Ratio
+invert (ratio 3 1)
+invert (ratio 3)
+invert 5
+import stdlib/experimental/Ratio
+invert 4
+invert 4;
+invert 4
+invert
+invert
+invert 5
+invert
+import stdlib/experimental/Ratio
+in
+inver
+i
 4
-3
--2
-3 / 2
-3 - 4 - 5
-3 + 4 + 5
-10 ^ 25
-10 ^ 10
-3 ^ 10
-3 ^10
-(flip -) 4 0
-(flip -) 4 3
-(flip -) 3 4
-(flip -)
-flip sub
-3::25
-3::20
-3::8
-3::99
-3::5
-3::4
-3,,4
-[1, 2] + [3, 4]
-2 + 3
-1 + 2
-[1] + [2]
-[1, 2, 3] + [4, 5, 6]
-2:(3:(4:(5:[])))
-2:3:4:[]
-2:[1, 2, 3]
-3 `add` 4
-3 `+` 4
-3 `add` 4
-+ 3 4
-3 |> (- 2)
-(- 2)
-3 |> (-2)
-3 |> (*3)
-3 |> (*4)
-3 |> (4*)
-3 |> (*4)
-3 |> (*)
-3 |> (\x -> x * x)
-3 |> 4
-|> = \x -> \f -> f x
-4 |> 3
-|> = \x -> \y -> 5
-3 |> 4
-|> = add
-3 +- 4
-+- = add
-10 ^ 30
-10 ^ 20
-10 ^ 90
-10 ^ 999
-3 ^ 4
-3^4
-3 / 4
-3 + 4
-3 * 4
-3 * 4
-* = mul
-* = mul
-* = \x -> \y -> mul x y
-3 + 4
-(add 3 4) `mul` 3
-put (show 3)
-put "Test"
-debugRaw 4
-show 4
-exec (debugRaw 4)
-debugRaw 4
-debugRaw
-add 3 4
-3 `add` (id 4)
-3 `add` id
-3 `add` 4
+invert
+invert (ratio 1 3)
+import stdlib/experimental/Ratio
+import stdlib/experimental/Ratio
+invert
+invert (ratio 1 3)
+import stdlib/experimental/Ratio
+(ratio 2 5) <*> (ratio 5 4)
+import stdlib/experimental/Ratio
+(ratio 2 5) <*> (ratio 5 4)
+(ratio 0 5) <*> (ratio 5 4)
+(ratio 3 9) <*> (ratio 1 3)
+import stdlib/experimental/Ratio
+import stdlib/experimental/Ratio
+(ratio 3 9) <*> (ratio 1 3)
+import stdlib/experimental/Ratio
+(ratio 3 9) `eqR` (ratio 1 3)
+(ratio 3 9) == (ratio 1 3)
+import stdlib/experimental/Ratio
+(ratio 3 9) == (ratio 1 3)
+import stdlib/experimental/Ratio
+import stdlib/experimental/Ratio

@@ -85,13 +85,25 @@ parseAsReplExpr = fmap (fmap Run) . parse (many (expr)) "REPL"
 
 -- Identifier
 reservedIDs :: [String]
-reservedIDs = ["if", "then", "else", "import", "exposing", "qualified", "let", "in", ";", ",", "=", "->"]
+reservedIDs = ["if", "then", "else", "import", "exposing", "qualified", "let", "in", ";", ",", "->"]
+
+idChar :: Parser Char 
+idChar = alphaNum <|> oneOf "._'¹²³⁴⁵⁶⁷⁸⁹⁰"
 
 identifier :: Parser String
-identifier = noPof (string <$> reservedIDs) (do {x <- letter; xs <- many (alphaNum <|> oneOf "._'"); return (x:xs)}) <?> "identifier"
+identifier = noPof (do keyword <$> reservedIDs) (do {x <- letter; xs <- many idChar; return (x:xs)}) <?> "identifier"
+
+keyword :: String -> Parser String
+keyword s = do
+    x <- string s
+    notFollowedBy idChar
+    return x
+
+moduleIdentifier :: Parser String
+moduleIdentifier = do {x <- letter; xs <- many (idChar <|> oneOf "/"); return (x:xs)} <?> "module identifier"
 
 operator :: Parser String
-operator = (many1 $ oneOf "+-_*/~%&$§!#<>|^°?:") <?> "operator"
+operator = (many1 $ oneOf "+-_*/~%&$§!#<>|^°?:=") <?> "operator"
 
 -- Statement
 statement :: Parser Statement
@@ -119,7 +131,7 @@ importS = do
     spaces
     isQ <- option False (const True <$> string "qualified")
     spaces
-    mname <- identifier
+    mname <- moduleIdentifier
     spaces
     it <- importTypeS
     return $ Import mname it isQ
@@ -200,7 +212,7 @@ letE = do
     spaces
     vex <- expr
     spaces
-    string "in"
+    try $ string "in"
     spaces
     e <- expr
     return $ Let name vex e
@@ -214,6 +226,7 @@ ifE = do
     spaces
     string "then"
     spaces
+    -- TODO: BUG: Needs Parens for infix?!?
     th <- expr
     spaces
     string "else"

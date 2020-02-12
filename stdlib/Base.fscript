@@ -9,8 +9,10 @@ comp = \f -> \g -> \x -> f (g x);
 toBool = not >> not;
 flip = \f -> \x -> \y -> f y x;
 |> = \x -> \f -> f x;
-<| = flip |>;
-$ = <|;
+-- No right associativity yet
+-- <| = flip |>;
+-- $ = <|;
+== = eq;
 
 -- Boolean
 and = \x -> \y -> if x then y else x;
@@ -27,18 +29,30 @@ gt  = \x -> \y -> eq 1 (ord x y);
 
 -- Math
 factorial = \n -> if n
-                  then mul n (factorial (sub n 1))
+                  then (n * (factorial (n - 1)))
                   else 1;
 
 pow = \x -> \n -> if n
-    then mul x (pow x (sub n 1))
+    then (x * (pow x (n - 1)))
     else 1;
 
 *  = mul;
 +  = add;
---/  = div;
+/  = div;
 -  = sub;
 ^  = pow;
+divBy = flip div;
+subBy = flip sub;
+
+abs = \x -> if (x < 0) then (0 - x) else x;
+
+
+gcd = \x -> \y -> gcd_ (abs x) (abs y);
+
+gcd_ = \x -> \y -> if y
+    then gcd_ y (x `rem` y)
+    else x;
+
 
 -- Lists
 map = \f -> \l -> if l then let x = head l in let xs = tail l in
@@ -50,11 +64,11 @@ map = \f -> \l -> if l then let x = head l in let xs = tail l in
 
 range = \s -> \e -> if eq s e
                     then []
-                    else cons s (range (add s 1) e);
+                    else cons s (range (s + 1) e);
 
 :: = range;
 
-rangeI = \s -> \e -> range s (add e 1);
+rangeI = \s -> \e -> range s (e + 1);
 
 ::+ = rangeI;
 
@@ -71,8 +85,6 @@ foldl = \f -> \z -> \l -> if l then let x = head l in let xs = tail l in
 length = \l -> if l
     then add 1 (length (tail l))
     else 0;
-
-null = eq [];
 
 
 getAt = \n -> \l -> let x = head l in let xs = tail l in

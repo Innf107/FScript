@@ -30,5 +30,8 @@
     <orderEntry type="library" name="process-1.6.5.0" level="project" />
     <orderEntry type="library" name="stm-2.5.0.0" level="project" />
     <orderEntry type="library" name="terminfo-0.4.1.2" level="project" />
+    <orderEntry type="library" name="ansi-terminal-0.9.1" level="project" />
+    <orderEntry type="library" name="colour-2.3.5" level="project" />
+    <orderEntry type="library" name="split-0.2.3.3" level="project" />
   </component>
 </module>

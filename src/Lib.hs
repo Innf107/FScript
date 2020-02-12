@@ -33,3 +33,14 @@ anyP (p:ps) = try p <|> anyP ps
 noPof :: (Show a) => [Parser a] -> Parser a -> Parser a
 noPof [] p = p
 noPof ns p = notP (anyP ns) p  
+
+setAL :: (Eq k) => k -> v -> [(k, v)] -> [(k, v)]
+setAL k v []     = [(k, v)]
+setAL k v ((k', v'):xs)
+    | k == k'    = ((k, v):xs)
+    | otherwise  = ((k', v'):(setAL k v xs))
+
+
+
+(|>) :: a -> (a -> b) -> b
+x |> f = f x
