@@ -37,7 +37,7 @@ emptyState = RTState {getVals=nativeFs ++ nativeVals, getArgs=[], getClosures=[]
 
 nativeFs :: [(String, RTValue)]
 nativeFs = (\(x, y) -> (x, NativeF y [])) <$> [("put", putF), ("show", showF), ("debugRaw", debugRawF), ("head", headF),
-    ("tail", tailF), ("exec", execF), ("typeof", typeofF)]
+    ("tail", tailF), ("exec", execF), ("typeof", typeofF), ("eval", evalF)]
 
 nativeVals :: [(String, RTValue)]
 nativeVals = [("add", addF), ("sub", subF), ("ord", ordF), ("mul", mulF), ("div", divF), ("cons", consF),
@@ -54,9 +54,7 @@ main = do
         let noPrint = "--debug-stmnt-only" `elem` args
         let noStdLib = "--debug-no-stdlib" `elem` args
         let help = "--help" `elem` args || "-h" `elem` args
-        case help of
-          True -> showHelp
-          _ ->
+        if help then showHelp else
             case repl of
                 True -> do
                     printSplashScreen
@@ -127,15 +125,18 @@ runStatement (Run e)            state = case eval e state of
 runIOAction :: IOAction -> RTState -> IO ()
 runIOAction (Print s) state      = putStrLn s
 runIOAction (ReadLine) state     = getLine >> return ()
+runIOAction (ReadFile _) state   = putStrLn "The IOAction ReadFile is useless unless it is used with compIO"
+runIOAction (PureIO _) state     = return ()
 runIOAction (Composed a f) state = case a of
     Print s -> putStrLn s >> tryRun (FCall (Value f) (Value NullV))
-    ReadLine -> do
-                    line <- getLine
-                    let lv = strAsRTV line
-                    tryRun $ FCall (Value f) (Value lv)
-    where tryRun ex = case eval ex state of
+    ReadLine -> readBasic (strAsRTV <$> getLine)
+    ReadFile fp -> readBasic (strAsRTV <$> readFile fp)
+    PureIO v -> readBasic (return v)
+    where readBasic io = io >>= (\c -> tryRun $ FCall (Value f) (Value c))
+          tryRun ex = case eval ex state of
                        IOV a -> runIOAction a state
                        x     -> putStrLn $ "IO actions can only be composed with Functions that return other IO actions. '" ++ show x ++ "is not an IO action"
+
 
 runImport :: String -> ImportType -> Bool -> RTState -> IO RTState
 runImport path iType isQualified state = do
@@ -211,15 +212,9 @@ isException :: RTValue -> Bool
 isException (Exception _ _) = True
 isException _ = False
 
--- f = \x -> \y -> x
--- FuncV "x" (Literal (LambdaL "y" (Var "x"))) []
-
--- f 3
--- FuncV "y" (Var "x") [("x",IntV 3)]
-
--- g = \x -> y
--- FuncV "x" (Var "y") []
-
--- h = \y -> g 3
--- FuncV "y" (FCall (Var "g") (Literal (IntL 3))) []
-
+evalF :: RTValue -> RTState -> RTValue
+evalF x state = case rtVAsMStr x of
+    Just s -> case parseEval s of
+        Left e -> Exception "Parse" $ show e
+        Right ex -> eval ex state
+    Nothing -> Exception "Type" $ "Can only evaluate Strings. '" ++ show x ++ "' is not a String"

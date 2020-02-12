@@ -57,8 +57,10 @@ data RTValue = NumV Float
 
 data RTState = RTState {getVals::[(String, RTValue)], getArgs::[(String, RTValue)], getClosures::[(String, RTValue)]} deriving (Show, Eq)
 
-data IOAction = Print String
+data IOAction = PureIO RTValue
+              | Print String
               | ReadLine 
+              | ReadFile String
               | Composed IOAction RTValue
               deriving (Show, Eq, Read)
 
@@ -76,6 +78,8 @@ parseFile str fileName = (parse (many (statement)) fileName str)
 parseFileExpr :: String -> String -> Either ParseError [Statement]
 parseFileExpr str fileName = fmap (map Run) (parse (many (expr)) fileName str)
 
+parseEval :: String -> Either ParseError Expr
+parseEval str = parse expr "EVAL" str
 
 parseAsRepl :: String -> Either ParseError [Statement]
 parseAsRepl = parse (many (statement)) "REPL"
