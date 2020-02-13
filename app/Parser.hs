@@ -107,7 +107,7 @@ moduleIdentifier :: Parser String
 moduleIdentifier = do {x <- letter; xs <- many (idChar <|> oneOf "/"); return (x:xs)} <?> "module identifier"
 
 operator :: Parser String
-operator = (many1 $ oneOf "+-_*/~%&$§!#<>|^°?:=") <?> "operator"
+operator = (many1 $ oneOf "+-_*/~%&$§!#<>|^°?:=@") <?> "operator"
 
 -- Statement
 statement :: Parser Statement

@@ -1,3 +1,33 @@
+3 /= 2
+3 != 3
+3 /= 3
+3 != 5
+3 /= 5
+toBool False
+toBool True
+toBool "0"
+toBool ""
+toBool {a:5}
+toBool {}
+toBool []
+toBool 0
+toBool 3
+not ° not
+comp not not
+toBool 3
+id
+toBool 2
+""t"
+"👽"
+"👽"
+"👽"
+"😀"
+😀
+length "😀"
+length "ä"
+x
+xx
+x = "ä"
 1 + 2
 1 + 2
 exec (compIO readLine print)
@@ -68,33 +98,3 @@ import stdlib/experimental/Ratio
 3 % 4
 import stdlib/experimental/Ratio
 fromNum 3
-fromNum 3
-3 % 4
-import stdlib/experimental/Ratio
-3 % 4
-(ratio 3 1) </> (ratio 5 4)
-import stdlib/experimental/Ratio
-(ratio 3 1) </> (ratio 5 4)
-(ratio 3 1) </> (5 4)
-(ratio 3 1) (5 4)
-import stdlib/experimental/Ratio
-invert (ratio 3 1)
-invert (ratio 3)
-invert 5
-import stdlib/experimental/Ratio
-invert 4
-invert 4;
-invert 4
-invert
-invert
-invert 5
-invert
-import stdlib/experimental/Ratio
-in
-inver
-i
-4
-invert
-invert (ratio 1 3)
-import stdlib/experimental/Ratio
-import stdlib/experimental/Ratio

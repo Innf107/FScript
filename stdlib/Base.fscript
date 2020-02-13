@@ -1,18 +1,22 @@
 -- General
->> = comp;
 id = \x -> x;
 const = \x -> \y -> x;
 print = \x -> put (show x);
 not = \x -> if x then False else True;
 eq = \x -> \y -> not (ord x y);
 comp = \f -> \g -> \x -> f (g x);
-toBool = not >> not;
+° = comp;
+∘ = °
+toBool = not ∘ not;
+>> = comp;
 flip = \f -> \x -> \y -> f y x;
 |> = \x -> \f -> f x;
 -- No right associativity yet
 -- <| = flip |>;
 -- $ = <|;
 == = eq;
+/= = \x -> \y -> not (x == y);
+!= = /=;
 
 -- Boolean
 and = \x -> \y -> if x then y else x;

@@ -20,7 +20,8 @@ showHelp = do
     putStrLn "    | --debug-expr-only  | REPL ONLY; Only evaluate and print out expressions"
     putStrLn "    | --debug-stmnt-only | REPL ONLY; Only evaluate statements"
     putStrLn ""
-    putStrLn "Github/Documentation: https://github.com/"
+    setSGR [SetColor Foreground Vivid Magenta]
+    putStrLn "Github/Documentation: https://github.com/Innf107/FScript"
     setSGR [Reset]
 
 printSplashScreen :: IO ()
