@@ -16,7 +16,6 @@ import Data.Either
 import Lib
 import Text.Parsec.Prim ((<?>))
 import Control.DeepSeq
-import qualified Data.Map as M
 
 data Statement = NOP
                | Import String ImportType Bool
@@ -56,16 +55,16 @@ data RTValue = NumV Float
              | ListV [RTValue]
              | BoolV Bool
              | IOV IOAction
-             | FuncV String Expr (M.Map String RTValue)
-             | NativeF (RTValue -> RTState -> RTValue) (M.Map String RTValue)
+             | FuncV String Expr [(String, RTValue)]
+             | NativeF (RTValue -> RTState -> RTValue) [(String, RTValue)]
              | NullV
              | MapV [(String, RTValue)]
              | ExceptionV String String
              deriving (Show, Eq, Read)
 
-
-data RTState = RTState {getVals::M.Map String RTValue, getArgs::M.Map String RTValue,
-                        getClosures::M.Map String RTValue, getDests::[Destr]}
+--                                                  TODO: Does not have to be a list
+data RTState = RTState {getVals::[(String, RTValue)], getArgs::[(String, RTValue)],
+                        getClosures::[(String, RTValue)], getDests::[Destr]}
                         deriving (Show, Eq, Read)
 
 data Destr = Destr String String [Expr] deriving (Show, Eq, Read)

@@ -49,3 +49,27 @@ instance Bifunctor (,) where
 |   ___| |___   | |  |     |       /  |  | |   ____/     |  |
 |  |      ___|  | |  |___  |  |\  \   |  | |  |          |  |
 |__|     |______| |______| |__| \__\  |__| |__|          |__|
+
+
+[Run (FCall (Var "print") (Let (NormalDef "x" (Literal (LambdaL "y" (Let (NormalDef "z" (Literal (NumL 3.0))) (FCall (FCall (Var "y") (Var "+")) (Var "z")))))) (FCall (Var "x") (Literal (NumL 4.0)))))]
+
+
+
+
+(Let
+    (NormalDef "x"
+        (Literal
+            (LambdaL "y"
+                (Let
+                    (NormalDef "z"
+                        (Literal
+                            (NumL 3.0)))
+                    (FCall
+                        (FCall
+                            (Var "y")
+                            (Var "+"))
+                        (Var "z"))))))
+    (FCall
+        (Var "x")
+        (Literal
+            (NumL 4.0))))

@@ -22,28 +22,26 @@ import Cmdline
 import NativeFs
 import System.Console.ANSI
 import Control.Parallel.Strategies
-import qualified Data.Map as M
 
-updateVals :: (M.Map String RTValue -> M.Map String RTValue) -> RTState -> RTState
+updateVals :: ([(String, RTValue)] -> [(String, RTValue)]) -> RTState -> RTState
 updateVals f state = RTState {getVals=f(getVals state), getArgs=getArgs state, getClosures = (getClosures state), getDests=getDests state}
 
-updateArgs :: (M.Map String RTValue -> M.Map String RTValue) -> RTState -> RTState
+updateArgs :: ([(String, RTValue)] -> [(String, RTValue)]) -> RTState -> RTState
 updateArgs f state = RTState {getVals=getVals state, getArgs=f (getArgs state), getClosures = (getClosures state), getDests=getDests state}
 
-updateClosures :: (M.Map String RTValue -> M.Map String RTValue) -> RTState -> RTState
+updateClosures :: ([(String, RTValue)] -> [(String, RTValue)]) -> RTState -> RTState
 updateClosures f state = RTState {getVals=getVals state, getArgs= (getArgs state), getClosures =f (getClosures state), getDests=getDests state}
 
 updateDests :: ([Destr] -> [Destr]) -> RTState -> RTState
 updateDests f state = RTState {getVals=getVals state, getArgs=getArgs state, getClosures=getClosures state, getDests=f (getDests state)}
 
 emptyState :: RTState
-emptyState = RTState {getVals=M.fromList (nativeFs ++ nativeVals), getArgs=M.empty, getClosures=M.empty, getDests=[]}
+emptyState = RTState {getVals=nativeFs ++ nativeVals, getArgs=[], getClosures=[], getDests=[]}
 
 
 nativeFs :: [(String, RTValue)]
-nativeFs = (\(x, y) -> (x, NativeF y M.empty)) <$> [("put", putF), ("show", showF), ("debugRaw", debugRawF), ("head", headF),
-    ("tail", tailF), ("exec", execF), ("typeof", typeofF), ("eval", evalF), ("pureIO", pureIOF), 
-    ("round", roundF)]
+nativeFs = (\(x, y) -> (x, NativeF y [])) <$> [("put", putF), ("show", showF), ("debugRaw", debugRawF), ("head", headF),
+    ("tail", tailF), ("exec", execF), ("typeof", typeofF), ("eval", evalF)]
 
 nativeVals :: [(String, RTValue)]
 nativeVals = [("add", addF), ("sub", subF), ("ord", ordF), ("mul", mulF), ("div", divF), ("cons", consF),
@@ -124,11 +122,11 @@ runStatements (s:sts) state = do
 runStatement :: Statement -> RTState -> IO (RTState, Bool)
 runStatement NOP                    state = return (state, False)
 runStatement (Import m iType q)     state = (\x -> (x, False)) <$> runImport m iType q state
-runStatement (Def (NormalDef n e))  state = return $ (updateVals (M.insert n (eval e state)) state, False)
+runStatement (Def (NormalDef n e))  state = return $ (updateVals ((n, eval e state):) state, False)
 runStatement (Def (DestDef dn ns e))state = case find (\(Destr dn' _ _) -> dn == dn') (getDests state) of
     Nothing -> putStrLn ("Destructuring " ++ dn ++ "does not exist!") >> return (state, True)
     Just (Destr _ v exps) ->
-        return $ (updateVals (insertAll ((\(n, ne) -> (n, evalDest v e ne state)) <$> (zip ns exps))) state, False)
+        return $ (updateVals (((\(n, ne) -> (n, evalDest v e ne state)) <$> (zip ns exps))++) state, False)
 
 runStatement (DefDest dest)         state = return $ (updateDests (dest:) state, False)
 runStatement (Run e)                state = case eval e state of
@@ -188,31 +186,29 @@ runImport path iType isQualified state = do
 getImportFromPath :: String -> String -> String
 getImportFromPath path did = (last $ endBy "/" path) ++ "." ++ did
 
-dEBUG = False
-
 eval :: Expr -> RTState -> RTValue
-eval (Value (NativeF f cls))    state = traceIf dEBUG "Value NativeF" $ NativeF f (M.unions [(getArgs state), (getClosures state),cls])
-eval (Value val)                state = traceIf dEBUG ("Value " ++ show val) $ val
-eval (FCall fx ax)              state = traceIf dEBUG "FCallStart" $ case av of
-    ExceptionV eType eMsg ->            traceIf dEBUG "Exception in av" $ ExceptionV eType eMsg
+eval (Value (NativeF f cls))    state = trace "Value NativeF" $ NativeF f ((getArgs state)++(getClosures state)++cls)
+eval (Value val)                state = trace ("Value " ++ show val) $ val
+eval (FCall fx ax)              state = trace "FCallStart" $ case av of
+    ExceptionV eType eMsg -> trace "Exception in av" $ ExceptionV eType eMsg
     _ -> case eval fx state of
-        (FuncV pn ex cls) -> traceIf dEBUG "FCall" eval ex (updateClosures (M.union cls) $ updateArgs (const (M.singleton pn av)) state)
-        (NativeF f cls)   -> traceIf dEBUG "FCall NativeF" $ f av (updateClosures (M.union cls) state)
-        ExceptionV et em  -> traceIf dEBUG "Exception" ExceptionV et em
+        (FuncV pn ex cls) -> trace "FCall" eval ex (updateClosures (cls++) $ updateArgs (const [(pn, av)]) state)
+        (NativeF f cls)   -> trace "FCall NativeF" $ f av (updateClosures (cls++) state)
+        ExceptionV et em  -> trace "Exception" ExceptionV et em
         x                 -> ExceptionV "Type" $ "Tried to call a value that is not a function! The value was '" ++ show x ++ "'"
     where av = eval ax state
 
-eval (Let (NormalDef n vx) ex)  state = traceIf dEBUG "Let NormalDef" $ eval ex (updateArgs (M.insert n (eval vx state)) state)
-eval (Let (DestDef dn ns e) ex) state = traceIf dEBUG "Let DestDef" $ case find (\(Destr dn' _ _) -> dn == dn') (getDests state) of
+eval (Let (NormalDef n vx) ex)  state = trace "Let NormalDef" $ eval ex (updateArgs ((n, eval vx state):) state)
+eval (Let (DestDef dn ns e) ex) state = trace "Let DestDef" $ case find (\(Destr dn' _ _) -> dn == dn') (getDests state) of
     Nothing -> ExceptionV "State" ("Destructuring " ++ dn ++ " does not exist!")
     Just (Destr _ v exps) ->
-        eval ex (updateArgs (insertAll ((\(n, ne) -> (n, evalDest v e ne state)) <$> (zip ns exps))) state)
-eval (Var n)                    state = traceIf dEBUG ("Var " ++ n) $ case M.lookup n (getArgs state) <|> M.lookup n (getClosures state) <|> M.lookup n (getVals state) of
+        eval ex (updateArgs (((\(n, ne) -> (n, evalDest v e ne state)) <$> (zip ns exps))++) state)
+eval (Var n)                    state = trace ("Var " ++ n) $ case lookup n (getArgs state) <|> lookup n (getClosures state) <|> lookup n (getVals state) of
                             Just x  -> x
                             Nothing -> ExceptionV "State" $ "Value " ++ n ++ " does not exist in the current state! \n\nCurrent Args were: " ++
                                 show (getArgs state) ++ "\n\nClosures were: "
                                 ++ show (getClosures state)
-eval (If c th el)               state = traceIf dEBUG "If" $ case (eval c state) of
+eval (If c th el)               state = trace "If" $ case (eval c state) of
     BoolV False   -> eval el state
     NumV 0        -> eval el state
     NullV         -> eval el state
@@ -221,7 +217,7 @@ eval (If c th el)               state = traceIf dEBUG "If" $ case (eval c state)
     ExceptionV t m -> ExceptionV t m
     _             -> eval th state
 
-eval (Literal l)                state = traceIf dEBUG ("Literal " ++ show l) $ case l of
+eval (Literal l)                state = trace ("Literal " ++ show l) $ case l of
     NumL x       -> NumV x
     CharL x      -> CharV x
     BoolL x      -> BoolV x
@@ -231,7 +227,7 @@ eval (Literal l)                state = traceIf dEBUG ("Literal " ++ show l) $ c
         Nothing -> ListV $ args
         where args = ((`eval` state) <$> xps)
               ex = find isException args
-    LambdaL n xp -> FuncV n xp (M.union (getArgs state) (getClosures state))
+    LambdaL n xp -> FuncV n xp (getArgs state ++ getClosures state)
     MapL xps     -> case ex of
         Just e -> snd e
         Nothing -> MapV args

@@ -6,7 +6,7 @@ not = \x -> if x then False else True;
 eq = \x -> \y -> not (ord x y);
 comp = \f -> \g -> \x -> f (g x);
 ° = comp;
-∘ = °
+∘ = °;
 toBool = not ∘ not;
 >> = comp;
 flip = \f -> \x -> \y -> f y x;
@@ -59,22 +59,47 @@ gcd_ = \x -> \y -> if y
 
 
 -- Lists
-map = \f -> \l -> if l then let x = head l in let xs = tail l in
+map = \f -> \l -> if l then let (HT x xs) = l in
         cons (f x) (map f xs)
         else [];
+
+mapI = \f -> \l -> mapIS f l 0;
+
+mapIS = \f -> \l -> \i ->
+        if l
+        then let (HT x xs) = l in
+            cons (f x i) (mapIS f xs (i + 1))
+        else
+            [];
+
+flatMap = \f -> \l ->
+        if l
+        then let (HT x xs) = l in
+            ((f x) + (flatMap f xs))
+        else
+            [];
 
 <$> = map;
 : = cons;
 
-range = \s -> \e -> if eq s e
+range = \s -> \e -> if (s >= e)
                     then []
                     else cons s (range (s + 1) e);
+
+rangeStep = \s -> \e -> \step -> if (s >= e)
+                                 then []
+                                 else cons s (rangeStep (s + step) e step);
 
 :: = range;
 
 rangeI = \s -> \e -> range s (e + 1);
 
 ::+ = rangeI;
+
+
+repeat = \x -> \i -> if (i <= 0)
+    then []
+    else (x : (repeat x (i - 1)));
 
 filter = \f -> \l -> if l then let x = head l in let xs = tail l in
     if f x
@@ -90,6 +115,9 @@ length = \l -> if l
     then add 1 (length (tail l))
     else 0;
 
+reverse = \l -> if l
+    then let (HT x xs) = l in ((reverse xs) + [x])
+    else [];
 
 getAt = \n -> \l -> let x = head l in let xs = tail l in
     if n
@@ -97,10 +125,30 @@ getAt = \n -> \l -> let x = head l in let xs = tail l in
         else Null;
 !! = getAt;
 
+<<HT l>> head l @ tail l;
+
+padStart = \x -> \i -> \l -> ((repeat x (i - (length l))) + l);
+
+take = \i -> \l -> if ((toBool l) && (i > 0))
+    then let (HT x xs) = l in (x : (take (i - 1) xs))
+    else [];
+
+skipLast = \i -> \l -> take ((length l) - i) l;
+
 -- IO
 >>= = compIO;
 
+>> = \x -> \y -> x >>= (const y);
+
 compIOForever = \a -> \f -> compIO a (\x -> compIO (f x) (\y -> compIOForever a f));
+
+doAll = \l -> if l
+    then let (HT x xs) = l in (x >> (doAll xs))
+    else pureIO Null;
+
+printAll = \l -> doAll (map print l);
+
+putAll = \l -> doAll (map put l);
 
 -- JSON compatibility
 null = Null;

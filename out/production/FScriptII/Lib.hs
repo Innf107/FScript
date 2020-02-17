@@ -7,8 +7,6 @@ import Text.Parsec.String.Char
 import Text.Parsec.String.Combinator
 import Control.Applicative ((<|>), many)
 import Data.List as L
-import Debug.Trace (trace)
-import qualified Data.Map as M
 
 mapLeft :: (a -> b) -> Either a c -> Either b c
 mapLeft f (Left x)  = (Left (f x))
@@ -46,13 +44,3 @@ setAL k v ((k', v'):xs)
 
 (|>) :: a -> (a -> b) -> b
 x |> f = f x
-
-
-traceIf :: Bool -> String -> a -> a
-traceIf True s x  = trace s x
-traceIf False _ x = x
-
-
-insertAll :: (Ord k) => [(k, v)] -> M.Map k v -> M.Map k v
-insertAll [] m          = m
-insertAll ((k, v):xs) m = M.insert k v (insertAll xs m)

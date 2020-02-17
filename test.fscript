@@ -1,6 +1,12 @@
-x = 5;
-y = 7;
-z = -1;
+import stdlib/experimental/Graph;
 
-print 21;
+config = {
+    height:60,
+    scaleX:1,
+    scaleY:1
+};
+
+f = \x -> (2 * (x ^ 2)) - (5 * x) + 3;
+
+putAll (plotL config (f <$> (rangeStep 0 10 0.1)));
 

@@ -33,5 +33,6 @@
     <orderEntry type="library" name="ansi-terminal-0.9.1" level="project" />
     <orderEntry type="library" name="colour-2.3.5" level="project" />
     <orderEntry type="library" name="split-0.2.3.3" level="project" />
+    <orderEntry type="library" name="parallel-3.2.2.0" level="project" />
   </component>
 </module>

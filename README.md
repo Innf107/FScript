@@ -212,3 +212,147 @@ More on this in [TODO](#TODO)
 
 
 # <a name="2"> 2 Basic Concepts
+
+# TODO!
+
+# <a name="3"> 3 The Standard Library
+
+## <a name="3.1"> 3.1 Native Functions
+A native function (or NativeF) is a function, that is implemented in the Haskell runtime instead of FScript.
+The implementations for these are located in [NativeFs.hs](app/NativeFs.hs).
+
+* [eval](#3.1 eval)
+* [compIO](#3.1 compIO)
+* [readLine](#3.1 readLine)
+* [throw](#3.1 throw)
+* [rem](#3.1 rem)
+* [show](#3.1 show)
+* [put](#3.1 put)
+* [add](#3.1 add)
+* [sub](#3.1 sub)
+* [mul](#3.1 mul)
+* [ord](#3.1 ord)
+* [div](#3.1 div)
+* [debugRaw](#3.1 debugRaw)
+* [head](#3.1 head)
+* [tail](#3.1 tail)
+* [exec](#3.1 exec)
+* [typeof](#3.1 typeof)
+* [cons](#3.1 cons)
+* [get](#3.1 get)
+* [set](#3.1 set)
+* [pureIO](#3.1 pureIO)
+* [round](#3.1 round)
+
+###<a name=3.1 eval>eval
+`eval` evaluates FScript code given as a string. 
+Note that it only evaluates **expressions** and not **statements**.
+The implementation for eval is located in [Main.hs](app/Main.hs) because it needs access to additional Runtime state.
+```haskell
+(eval "3 + 1")
+-- 4
+
+(eval "x = 3")
+-- Type Exception: Can only evaluate strings
+```
+
+###<a name=3.1 compIO>compIO
+`compIO` lets you compose IO actions. It is basically the FScript equivalent of haskell's `>>=`.
+`>>=` is actually an alias for `compIO`, defined in Base.
+More information in [IO](#2.2)
+
+###<a name=3.1 readLine>readLine
+`readLine` reads a line from stdin. You have to use compIO to be able to use that line.
+```haskell
++> readLine >>= print
+Test
+"Test"
+```
+
+###<a name=3.1 throw>throw
+`throw` takes two string arguments: The **type** of the exception and the **message**.
+```haskell
+f = \x -> if ((typeof x) == "Num") 
+    then x 
+    else throw "Type" "f needs its parameter to be of type Num";
+```
+
+###<a name=3.1 rem>rem
+The remainder of two integers.
+```haskell
+rem 3 4
+-- 3.0
+rem -1 4
+-- -1.0
+```
+
+###<a name=3.1 show>show
+Converts any value to a string
+```haskell
+show 5
+-- "5"
+```
+
+###<a name=3.1 put>put
+Prints a string to stdout. `print` is defined as follows:
+```haskell
+print = \x -> put (show x)
+```
+
+###<a name=3.1 add>add
+Simple addition. `+` is an alias
+```haskell
+add 3 4
+-- 7.0
+```
+###<a name=3.1 sub>sub
+Simple subtraction. `-` is an alias
+```haskell
+sub 3 4
+-- -1.0
+```
+###<a name=3.1 mul>mul
+Simple multiplication. `*` is an alias
+```haskell
+mul 3 4
+-- 12
+```
+###<a name=3.1 ord>ord
+Compares two values.
+Returns `-1` if the first is less than the second.
+Returns `1` if it is larger and `0` if they are equal. 
+###<a name=3.1 div>div
+Simple division. `/` is an alias
+```haskell
+div 3 4
+-- 0.75
+```
+###<a name=3.1 debugRaw>debugRaw
+A wrapper around haskell's show function.
+###<a name=3.1 head>head
+Returns the first element of a list
+```haskell
+head [1,2,3,4]
+-- 1.0
+```
+###<a name=3.1 tail>tail
+Returns every element of a list
+```haskell
+tail [1,2,3,4]
+-- [2.0, 3.0, 4.0]
+``` 
+###<a name=3.1 exec>exec
+###<a name=3.1 typeof>typeof
+###<a name=3.1 cons>cons
+###<a name=3.1 get>get
+###<a name=3.1 set>set
+###<a name=3.1 pureIO>pureIO
+###<a name=3.1 round>round
+
+
+
+
+
+
+
+
