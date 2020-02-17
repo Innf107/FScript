@@ -211,6 +211,7 @@ Because they are expressions, you can use let expressions anywhere you can put a
 More on this in [TODO](#TODO)
 
 
+<<<<<<< HEAD
 # <a name="2"> 2 Basic Concepts
 
 # TODO!
@@ -356,3 +357,9 @@ tail [1,2,3,4]
 
 
 
+=======
+# <a name="2">2 Basic Concepts
+
+## <a name="2.1">2.1 Types
+As mentioned previously, FScript is a dynamic programming language. This means, that types are not fixed at compile time, but are instead determined at runtime. A pretty obvious cons
+>>>>>>> 2d49d846ecc639131b051cf1e31f08666e2ff01d
