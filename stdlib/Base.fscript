@@ -40,6 +40,9 @@ pow = \x -> \n -> if n
     then (x * (pow x (n - 1)))
     else 1;
 
+max = \x -> \y -> if x > y then x else y;
+min = flip max;
+
 *  = mul;
 +  = add;
 /  = div;

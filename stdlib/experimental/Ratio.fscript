@@ -39,3 +39,7 @@ invert = \r -> ratio (get "denom" r) (get "enum" r);
 </> = \r1 -> \r2 -> r1 <*> (invert r2);
 
 showR = \r -> let r_ = shorten r in "(" + (show (get "enum" r_)) + "/" + (show (get "denom" r_)) + ")";
+
+<+> = \r1 -> \r2 -> let s1 = (r1 <*> (get "denom" r2)) in shorten (mapEnum (+ (get "enum" r2)) r1);
+
+<-> = \r1 -> \r2 -> 

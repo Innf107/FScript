@@ -337,7 +337,7 @@ head [1,2,3,4]
 -- 1.0
 ```
 ###<a name=3.1tail>tail
-Returns every element of a list
+Returns every element of a list except the first.
 ```haskell
 tail [1,2,3,4]
 -- [2.0, 3.0, 4.0]
