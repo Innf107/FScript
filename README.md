@@ -211,10 +211,10 @@ Because they are expressions, you can use let expressions anywhere you can put a
 More on this in [TODO](#TODO)
 
 
-<<<<<<< HEAD
 # <a name="2"> 2 Basic Concepts
 
-# TODO!
+## <a name="2.1">2.1 Types
+
 
 # <a name="3"> 3 The Standard Library
 
@@ -227,7 +227,6 @@ The implementations for these are located in [NativeFs.hs](app/NativeFs.hs).
 * [readLine](#3.1readLine)
 * [throw](#3.1throw)
 * [rem](#3.1rem)
-* [show](#3.1show)
 * [put](#3.1put)
 * [add](#3.1add)
 * [sub](#3.1sub)
@@ -237,7 +236,6 @@ The implementations for these are located in [NativeFs.hs](app/NativeFs.hs).
 * [debugRaw](#3.1debugRaw)
 * [head](#3.1head)
 * [tail](#3.1tail)
-* [exec](#3.1exec)
 * [typeof](#3.1typeof)
 * [cons](#3.1cons)
 * [get](#3.1get)
@@ -285,13 +283,6 @@ rem 3 4
 -- 3.0
 rem -1 4
 -- -1.0
-```
-
-###<a name=3.1show>show
-Converts any value to a string
-```haskell
-show 5
--- "5"
 ```
 
 ###<a name=3.1put>put
@@ -342,24 +333,40 @@ Returns every element of a list except the first.
 tail [1,2,3,4]
 -- [2.0, 3.0, 4.0]
 ``` 
-###<a name=3.1exec>exec
 ###<a name=3.1typeof>typeof
+returns the type of a value as a string. The type can be one of `Num`, `Bool`, `Char`, `List` or `Record``.
 ###<a name=3.1cons>cons
+Prepends a value to a list. An alias is `:`.
+```haskell
+cons 1 [2, 3, 4, 5]
+-- [1, 2, 3, 4, 5]
+```
 ###<a name=3.1get>get
+Gets a field from a record, specified by a string
+```haskell
+get "x" {x: 5}
+-- 5
+```
 ###<a name=3.1set>set
+Sets a field in a record, specified by a string
+```haskell
+set "x" 5 {x: 3}
+-- {x: 5}
+
+set "y" 5 {x: 3}
+-- {x: 3, y: 5}
+```
 ###<a name=3.1pureIO>pureIO
+creates an IO that does nothing but just returns a value. This is useful in combination with `compIO`
+```haskell
+((pureIO 5) >>= print)
+-- "5"
+```
 ###<a name=3.1round>round
-
-
-
-
-
-
-
-
-=======
-# <a name="2">2 Basic Concepts
-
-## <a name="2.1">2.1 Types
-As mentioned previously, FScript is a dynamic programming language. This means, that types are not fixed at compile time, but are instead determined at runtime. A pretty obvious cons
->>>>>>> 2d49d846ecc639131b051cf1e31f08666e2ff01d
+rounds a number
+```haskell
+round 4.7
+-- 5
+round 2.1
+-- 2
+```
