@@ -7,9 +7,9 @@ defaultConfig = {
 };
 
 plotL = \config -> \l ->
-    let (HT x xs) = l in
+    putAll (let (HT x xs) = l in
     [repeat '-' ((length l) + 4)] +
     (map (\y -> (padStart ' ' 4 (skipLast 2 (show (round (y * (get "scaleY" config)))))) + (map
             (\x -> if (y == ((round (x * (get "scaleY" config))))) then '#' else if (y == 0) then '-' else ' ') l) + "|")
         (reverse ((0::(get "height" config)))))
-    + [(repeat '_' ((length l) + 4)) + "|"];
+    + [(repeat '_' ((length l) + 4)) + "|"]);

@@ -1,0 +1,7 @@
+emptyAL = {
+    type:"AList",
+    al:[]
+};
+
+insertAL = \k -> \v -> \al -> update (add [[k, v]]) al;
+

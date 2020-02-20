@@ -2,6 +2,9 @@
 id = \x -> x;
 const = \x -> \y -> x;
 print = \x -> put (show x);
+printOrExec = \x -> if ((typeof x) == "IO")
+    then x
+    else print x;
 not = \x -> if x then False else True;
 eq = \x -> \y -> not (ord x y);
 comp = \f -> \g -> \x -> f (g x);
@@ -32,22 +35,33 @@ gt  = \x -> \y -> eq 1 (ord x y);
 
 
 -- Math
+pi = 3.1415927;
+e  = 2.7182818;
+
 factorial = \n -> if n
                   then (n * (factorial (n - 1)))
                   else 1;
 
-pow = \x -> \n -> if n
-    then (x * (pow x (n - 1)))
+powN = \x -> \n -> if n
+    then (x * (powN x (n - 1)))
     else 1;
+
+sqrt = \x -> root 2 x;
+
+root = \r -> \x -> rootInner r x (round (x / 2));
+
+rootInner = \r -> \x -> \guess -> if (((abs ((powN guess r) - x)) < (0.1 * x)) || guess < 0.01)
+    then guess
+    else rootInner r x ((((r - 1) * guess) + (x/(powN guess (r - 1)))) / 2);
 
 max = \x -> \y -> if x > y then x else y;
 min = flip max;
 
-*  = mul;
-+  = add;
-/  = div;
--  = sub;
-^  = pow;
+* = mul;
++ = add;
+/ = div;
+- = sub;
+^ = powN;
 divBy = flip div;
 subBy = flip sub;
 
@@ -122,13 +136,18 @@ reverse = \l -> if l
     then let (HT x xs) = l in ((reverse xs) + [x])
     else [];
 
-getAt = \n -> \l -> let x = head l in let xs = tail l in
-    if n
-        then getAt (sub n 1) xs
-        else Null;
+getAt = \n -> \l -> if l
+    then let (HT x xs) = l in
+        if n
+            then getAt (sub n 1) xs
+            else x
+    else Null;
+
 !! = getAt;
 
 <<HT l>> head l @ tail l;
+
+<<T l>> head l @ getAt 1 l @ getAt 2 l @ getAt 3 l @ getAt 4 l @ getAt 5 l @ getAt 6 l @ getAt 7 l;
 
 padStart = \x -> \i -> \l -> ((repeat x (i - (length l))) + l);
 
@@ -137,6 +156,14 @@ take = \i -> \l -> if ((toBool l) && (i > 0))
     else [];
 
 skipLast = \i -> \l -> take ((length l) - i) l;
+
+all = \f -> foldl (\acc -> \cur -> acc && (f cur)) True;
+
+any = \f -> foldl (\acc -> \cur -> acc || (f cur)) False;
+
+isString = all (\x -> (typeof x) == "Char");
+
+
 
 -- IO
 >>= = compIO;
@@ -159,3 +186,62 @@ false = False;
 true = True;
 
 
+-- Records
+update = \k -> \f -> \r -> set k (f (get k r)) r;
+
+setAll = \s -> \x -> setAllList (entries s) x;
+
+setAllList = \es -> \r -> if es
+    then let (HT x xs) = es in let (T k v) = x in
+    set k v (setAllInner xs r)
+    else r;
+
+
+-- FClasses
+show 30 += \x -> if (((typeof x) == "List") && (isString x))
+    then (['"'] + (foldl (\a -> \c -> a + [c]) "" x) + ['"'])
+    else throw "Type" "Not a String";
+
+show 20 += \x -> if ((typeof x) == "List")
+    then ("[" + (showListInner x) + "]")
+    else throw "Type" "Not a List";
+
+showListInner = \l -> if l
+    then let (HT x xs) = l in if xs
+        then ((show x) + ", " + (showListInner xs))
+        else show x
+    else "";
+
+show 20 += \x -> if ((typeof x) == "Record")
+    then ("{" + (showRecInner (entries x)) + "}")
+    else throw "Type" "Not a Record";
+
+showRecInner = \l -> if l
+    then let (HT x xs) = l in let (T k v) = x in if xs
+        then ((k + ": " + (show v)) + ", " + (showRecInner xs))
+        else (k + ": " + (show v))
+    else "";
+
+show 20 += showNum;
+
+show 20 += \x -> if ((typeof x) == "Char")
+    then ("'" + [x] + "'")
+    else throw "Type" "Not a Char";
+
+show 20 += \x -> if ((typeof x) == "Bool")
+    then if x then "True" else "False"
+    else throw "Type" "Not a Bool";
+
+show 20 += \x -> if ((typeof x) == "IO")
+    then "<IO>"
+    else throw "Type" "Not an IO";
+
+show 20 += \x -> if ((typeof x) == "Function")
+    then "<Function>"
+    else throw "Type" "Not a function";
+
+show 20 += \x -> if ((typeof x) == "Null")
+    then "Null"
+    else throw "Type" "Not Null";
+
+show 0 += const "<Unknown Type>";

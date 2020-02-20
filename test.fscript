@@ -6,7 +6,7 @@ config = {
     scaleY:1
 };
 
-f = \x -> (2 * (x ^ 2)) - (5 * x) + 3;
+f = \x -> e ^ x;
 
-putAll (plotL config (f <$> (rangeStep 0 10 0.1)));
+plotL config (f <$> (rangeStep 0 10 0.1));
 

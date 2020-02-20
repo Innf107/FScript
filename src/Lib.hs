@@ -56,3 +56,7 @@ traceIf False _ x = x
 insertAll :: (Ord k) => [(k, v)] -> M.Map k v -> M.Map k v
 insertAll [] m          = m
 insertAll ((k, v):xs) m = M.insert k v (insertAll xs m)
+
+findM :: (Monad m) => (a -> m Bool) -> [a] -> m (Maybe a)
+findM f [] = return Nothing
+findM f (x:xs) = f x >>= (\b -> if b then return (Just x) else findM f xs)  

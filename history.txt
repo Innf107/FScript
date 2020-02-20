@@ -1,100 +1,100 @@
-rem -1 4
-rem 3 4
-exec (readLine >>= print)
-readLine >>= print
-10 ^ 100
+id 5
+setAll {y:2, z:23, wa:23} x
+setAll {x:8, y:2, z:23, wa:23} x
+x
+update "x" (+ 3) x
+x
+x = {x:5, y:3}
+root 3 8
+root 3 8
+root 3 8
+root 3 8
+10 ^ 1000000
+10 ^ 100000
+10 ^ 10000
+10 ^ 1025
 10 ^ 25
-rangeStep 1 2 0.1
-exec (putAll (plotL defaultConfig (0::30)))
-putAll (plotL defaultConfig (0::30))
-import stdlib/experimental/Graph
-skipLast 2 (0::+5)
-skipLast 2 (0::5)
-take 3 (0::5)
-take 5 (0::5)
-take 2 (0::5)
-take 2 (0::5)
-take 2 (0::5)
-padStart '0' 4 "231"
-padStart '0' 0 "231"
-padStart '0' -1 "231"
-padStart '0' -1 ""
-padStart '0' -1 "2"
-padStart '0' 3 ""
-padStart '0' 3 "281"
-padStart '0' 3 "2812"
-padStart '0' 3 "281"
-padStart '0' 3 "81"
-padStart '0' 3 "8"
-padStart '0' 3 "8"
-padStart '0' 3 "8"
-padStart '0' 3 "8"
-padStart '0' 3 "8"
-padStart '0' 3 "8"
-exec (printAll ["Test", "ABC"])
-printAll ["Test", "ABC"]
-printAll ["Test", "ABC"]
-printAll ["Test", "ABC"]
-printAll ["Test", "ABC"]
-1 ^ 10000000
-1 ^ 1000
-10 ^ 750
-10 ^ 75
-10 ^ 90
-10 ^ 100
-10 ^ 30
-10 ^ 25
-10 ^ 25
-x
-x = 5
-10 ^ 25
-x
-x = 10 ^ 25
-x = 5
-plotL defaultConfig 0::20
-plotL defaultConfig [0,1,2]
-plotL [0,1,2]
-import stdlib/experimental/Graph
-[0,1,23,4,5,46,456,45,6,46,45,6,436,4,6]
-0::3
-xs
-x
-(HT x xs) = (0::7)
-xs
-x
-(HT x xs) = (0::7)
-!clear
-:!clear
-!clear
-x
-!clear
-xs
-x
-x
-xs
-x
-(HT x xs) = (0::7)
-x
-let (HT x xs) = (0::7)
-x
-x = [1, 2, 3]
-print 3
-x
-x
-x = 5
-x = 5
-plotL defaultConfig [1, 2]
-import stdlib/experimental/Graph
-plotL defaultConfig [1, 2]
-plotL defaultConfig [1]
-plotL
-import stdlib/experimental/Graph
-flatMap (\i -> (0::+i)) (0::+5)
-flatMap (\i -> (0::i)) (0::+5)
-(0::5)
-(0::%)
-flatMap (\i -> (0::i)) (0::5)
-flatMap (const 3) [1]print 1;
-flatMap (const 3) [1]
-flatMap (const 3) [1, 2]
-flatMap (\i -> [1]) (0::5)
+3 ^ 10
+root 3 1024
+root 3 1024
+root 3 1024
+root 3 1024
+root 3 1024
+root 3 8
+root 2 4
+root 4 86
+root 4 86
+root 3 86
+root 3 8
+root 3 8
+root 3 8
+root 3 8
+root 2 122
+root 2 12893
+root 2 435
+root 2 8
+powN 16 2
+powN 12 2
+powN 4 2
+root 3 8
+powN 3 8
+root 3 1024
+root 3 8
+root 3 1024
+root 3 1024
+root 2 1024
+root 2 512
+root 2 256
+root 2 16
+root 3 8
+root 2 8
+root 2 4
+root 4 2
+powN 4 2
+root 2 4
+root 3 8
+powN 2 3
+powN 3 2
+pown 3 2
+root 2 4
+root 3 8
+root 3 8 4 5
+root 3 8 4
+root 3 8
+root 3 8
+sqrt 1024
+sqrt 1024
+sqrt 256
+sqrt 8
+sqrt 4
+sqrt 2
+sqrt 5
+sqrt 20
+sqrt 125
+125
+sqrt 64
+sqrt 16
+sqrt 8
+sqrt 4
+sqrt 2
+sqrt 256
+sqrt 256
+256
+sqrt 64
+sqrt 25
+sqrt 16
+sqrt 8
+sqrt 16
+sqrt 16
+sqrt 4
+sqrt 4
+sqrt 4
+sqrt 4
+sqrt 4
+sqrt 4+
+sqrt
+sqrtInner
+sqrt 4
+f 1
+f 4
+f 3

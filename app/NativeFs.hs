@@ -36,28 +36,9 @@ remF = FuncV "x" (Value $ NativeF remInner M.empty) M.empty
             (x, y) -> ExceptionV "Type" $ "Rem needs both arguments to be Numbers! '"  ++ show x ++ "' and '" ++ show y ++ "' are not numbers!"
             where
                x = fromMaybe (NumV $ -999) $ M.lookup "x" (getClosures state)
-showF :: RTValue -> RTState -> RTValue
-showF (ListV vs)         state = case rtVAsMStr (ListV vs) of
-                            Just s -> (ListV $ map CharV $ '"':s++['"'])
-                            Nothing -> showListRT vs state
-showF (NumV i)           state = strAsRTV $ show i
-showF (BoolV b)          state = strAsRTV $ show b
-showF (NullV)            state = strAsRTV $ "Null"
-showF (NativeF _ _)      state = strAsRTV $ "<Function>"
-showF (FuncV _ _ _)      state = strAsRTV $ "<Function>"
-showF (IOV _)            state = strAsRTV $ "<IO>"
-showF (CharV c)          state = ListV [CharV '\'', CharV c, CharV '\'']
-showF (MapV xps)         state = strAsRTV $ "{" ++ intercalate ", " ((\(n, v) -> n ++ ": " ++ (rtVAsStr $ showF v state)) <$> xps) ++ "}"
-showF (ExceptionV eT en) state = strAsRTV $ eT ++ " Exception: '" ++ en ++ "'"
-showF x                  state = ExceptionV "Type" $ "Cannot call showF on the expression '" ++ show x ++ "'"
 
-showListRT :: [RTValue] -> RTState -> RTValue
-showListRT vs state = strAsRTV $ "[" ++ showListRTInner vs ++ "]"
-    where
-        showListRTInner [] = ""
-        showListRTInner (x:[]) = rtVAsStr $ showF x state
-        showListRTInner (x:xs) = (rtVAsStr $ showF x state) ++ ", " ++ showListRTInner xs
-
+showNumF (NumV x) state = strAsRTV $ show x
+showNumF _        state = ExceptionV "Type" "Not a Number"
 
 putF :: RTValue -> RTState -> RTValue
 putF (ListV vs) state = IOV $ Print $ rtVAsStr (ListV vs)
@@ -104,7 +85,6 @@ subF = FuncV "x" (Value $ NativeF subFInner M.empty) M.empty
             (NumV a,  NumV b)   -> (NumV $ a - b)
             (ListV a, ListV b)  -> (ListV $ unique a b)
             (BoolV a, BoolV b)  -> (BoolV $ if b then False else a)
-            --(NullV, x)          -> NullV
             (x, NullV)          -> x
             (x, y)              -> ExceptionV "Type" $ "Cannot subtract the expressions '" ++ show x ++ "' and '" ++ show y ++ "'"
             where
@@ -121,7 +101,7 @@ ordF = FuncV "x" (Value $ NativeF ordFInner M.empty) M.empty
             (ListV xs, ListV ys) -> ordToRTInt (case compare (length xs) (length ys) of
                             EQ -> if xs == ys then EQ else LT
                             x -> x)
-            (MapV xs, MapV ys)   -> ordToRTInt (case compare (length xs) (length ys) of
+            (RecordV xs, RecordV ys)   -> ordToRTInt (case compare (length xs) (length ys) of
                             EQ -> if xs == ys then EQ else LT
                             x -> x)
             (NullV, NullV)       -> NumV 0
@@ -187,15 +167,16 @@ execF (IOV a) state = IOV a
 execF x       state = ExceptionV "Type" $ "Can only run 'exec' on values of type IO. '" ++ show x ++ "' does not have the type IO!"
 
 typeofF :: RTValue -> RTState -> RTValue
-typeofF (IOV _)         state = strAsRTV "IO"
-typeofF (CharV _)       state = strAsRTV "Char"
-typeofF (ListV _)       state = strAsRTV "List"
-typeofF (NumV _)        state = strAsRTV "Num"
-typeofF (BoolV _)       state = strAsRTV "Bool"
-typeofF (FuncV _ _ _)   state = strAsRTV "Function"
-typeofF (NativeF _ _)   state = strAsRTV "Function"
-typeofF (NullV)         state = strAsRTV "Null"
-typeofF (MapV _)        state = strAsRTV "Map"
+typeofF (IOV _)          state = strAsRTV "IO"
+typeofF (CharV _)        state = strAsRTV "Char"
+typeofF (ListV _)        state = strAsRTV "List"
+typeofF (NumV _)         state = strAsRTV "Num"
+typeofF (BoolV _)        state = strAsRTV "Bool"
+typeofF (FuncV _ _ _)    state = strAsRTV "Function"
+typeofF (NativeF _ _)    state = strAsRTV "Function"
+typeofF (FClass _)       state = strAsRTV "Function"
+typeofF (NullV)          state = strAsRTV "Null"
+typeofF (RecordV _)      state = strAsRTV "Record"
 typeofF (ExceptionV _ _) state = strAsRTV "Exception"
 
 consF :: RTValue
@@ -214,7 +195,7 @@ getF = FuncV "n" (Value $ NativeF getInner M.empty) M.empty
     where
         getInner :: RTValue -> RTState -> RTValue
         getInner ms state = case ms of
-            MapV m -> case rtVAsMStr n of
+            RecordV m -> case rtVAsMStr n of
                 Nothing -> ExceptionV "Type" $ "get needs its first argument to be of type String. The value '" ++ show n ++ "' is not a String!"
                 Just s  -> fromMaybe NullV $ lookup s m
             x -> ExceptionV "Type" $ "get needs its second argument to be of type Map. The value '" ++ show x ++ "' is not a Map!"
@@ -226,9 +207,9 @@ setF = FuncV "n" (Literal (LambdaL "x" (Value $ NativeF setInner M.empty))) M.em
     where
         setInner :: RTValue -> RTState -> RTValue
         setInner ms state = case ms of
-            MapV m -> case rtVAsMStr n of
+            RecordV m -> case rtVAsMStr n of
                 Nothing -> ExceptionV "Type" $ "set needs its first argument to be of type String. The value '" ++ show n ++ "' is not a String!"
-                Just s  -> MapV $ setAL s x m
+                Just s  -> RecordV $ setAL s x m
             x -> ExceptionV "Type" $ "set needs its second argument to be of type Map. The value '" ++ show x ++ "' is not a Map!"
             where
                 n = fromMaybe (NumV $ -999) $ M.lookup "n" (getClosures state)
@@ -241,3 +222,8 @@ pureIOF x state = IOV $ PureIO x
 roundF :: RTValue -> RTState -> RTValue
 roundF (NumV n) state = NumV $ fromIntegral $ round n
 roundF x _            = ExceptionV "Type" $ "round needs its first argument to be of type Number. The value '" ++ show x ++ "' is not a Number."
+
+
+entriesF :: RTValue -> RTState -> RTValue
+entriesF (RecordV es) state = ListV ((\(x, y) -> ListV [strAsRTV x, y]) <$> es)
+entriesF _ state            = ExceptionV "Type" "Not a Record"

@@ -22,12 +22,15 @@ data Statement = NOP
                | Import String ImportType Bool
                | Def Definition
                | DefDest Destr
+               | DefFClass String FClassInstance
                | Run Expr
                deriving (Show, Eq, Read)
 
 data Definition = NormalDef String Expr
                 | DestDef String [String] Expr
                 deriving (Show, Eq, Read)
+
+data FClassInstance = FClassInstance Int Expr deriving (Show, Eq, Read)
 
 -- TODO: As
 data ImportType = All
@@ -48,7 +51,7 @@ data Lit = NumL Float
          | BoolL Bool
          | NullL
          | LambdaL String Expr
-         | MapL [(String, Expr)]
+         | RecordL [(String, Expr)]
          deriving (Show, Eq, Read)
 
 data RTValue = NumV Float
@@ -58,14 +61,15 @@ data RTValue = NumV Float
              | IOV IOAction
              | FuncV String Expr (M.Map String RTValue)
              | NativeF (RTValue -> RTState -> RTValue) (M.Map String RTValue)
+             | FClass [FClassInstance]
              | NullV
-             | MapV [(String, RTValue)]
+             | RecordV [(String, RTValue)]
              | ExceptionV String String
              deriving (Show, Eq, Read)
 
 
 data RTState = RTState {getVals::M.Map String RTValue, getArgs::M.Map String RTValue,
-                        getClosures::M.Map String RTValue, getDests::[Destr]}
+                        getClosures::M.Map String RTValue, getDests::[Destr], getFClasses::M.Map String [FClassInstance]}
                         deriving (Show, Eq, Read)
 
 data Destr = Destr String String [Expr] deriving (Show, Eq, Read)
@@ -118,7 +122,7 @@ keyword s = (do
     return x) <?> "keyword" 
     
 moduleIdentifier :: Parser String
-moduleIdentifier = do {x <- letter; xs <- many (idChar <|> oneOf "/"); return (x:xs)} <?> "module identifier"
+moduleIdentifier = many (idChar <|> oneOf "/~.") <?> "module identifier"
 
 operator :: Parser String
 operator = (many1 $ oneOf "+-_*/~%&$§!#<>|^°∘?:=") <?> "operator"
@@ -134,7 +138,7 @@ statement = do
 statement' :: Parser Statement
 statement' = do
     spaces
-    s <- try importS <|> try defS <|> try defDestS <|> try runS
+    s <- try importS <|> try defS <|> try defDestS <|> try defFClassS <|> try runS
     spaces
     char ';'
     return s
@@ -152,6 +156,17 @@ defDestS = do
             ds <- sepBy expr (char '@')
             return $ DefDest $ Destr name v ds
 
+
+defFClassS :: Parser Statement
+defFClassS = do
+            name <- identifier <|> operator
+            spaces
+            prec <- read <$> (many1 digit)
+            spaces
+            string "+="
+            spaces
+            e <- expr
+            return $ DefFClass name $ FClassInstance prec e
 
 commentS :: Parser Statement
 commentS = (spaces >> string "--" >> many (noneOf "\n") >> return NOP) <?> "comment"
@@ -343,7 +358,7 @@ fcallE = do
 
 -- Literals
 litE :: Parser Expr
-litE = Literal <$> (try spaces >> (numL <|> boolL <|> nullL <|> charL <|> listL <|> stringL <|> lambdaL <|> mapL))
+litE = Literal <$> (try spaces >> (numL <|> boolL <|> nullL <|> charL <|> listL <|> stringL <|> lambdaL <|> recordL))
 
 numL :: Parser Lit
 numL = (NumL . read) <$> (int <++> decimal <++> exponent)
@@ -373,9 +388,20 @@ nullL = do
 charL :: Parser Lit
 charL = do
          char '\''
-         x <- satisfy (const True)
+         x <- escapeC <|> noneOf "'"
          char '\''
          return $ CharL x
+         
+escapeC :: Parser Char
+escapeC = do
+    char '\\'
+    x <- satisfy (const True)
+    case lookup x escapes of
+        Nothing -> fail $ "Invalid escape code \\" ++ [x]
+        Just e -> return e
+         
+escapes :: [(Char, Char)]
+escapes = [('n', '\n'), ('\\', '\\'), ('\'', '\''), ('"', '"'), ('p', 'π')]
          
 listL :: Parser Lit
 listL = do
@@ -387,7 +413,7 @@ listL = do
 stringL :: Parser Lit
 stringL = do
             char '"'
-            chars <- many $ noneOf ['"']
+            chars <- many $ (escapeC <|> noneOf ['"'])
             char '"'
             return $ ListL (Literal . CharL <$> chars)
 
@@ -403,8 +429,8 @@ lambdaL = do
     e <- expr
     return $ LambdaL param e
 
-mapL :: Parser Lit
-mapL = do
+recordL :: Parser Lit
+recordL = do
     char '{'
     spaces
     elems <- (flip sepBy) (char ',')  (do 
@@ -422,4 +448,4 @@ mapL = do
             return (name, val))
     spaces
     char '}'
-    return $ MapL elems
+    return $ RecordL elems

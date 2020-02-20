@@ -1,0 +1,18 @@
+x
+x
+x
+x
+x
+x = 10 ^ 1000000
+x
+x = 10 ^ 100000
+!cat ~/.fscript/modules/stdlib/Base.fscript
+!Test
+:!test
+import ~/.fscript/modules/stdlib/Base.fscript
+import ~/.fscript/modules/stdlib/Base
+import ~/.fscript/modules/stdlib/Base
+import ~/.fscript/modules/stdlib/Base
+import ~/.fscript/modules/stdlib/Base
+id
+import ~/.fscript/modules/stdlib/Base

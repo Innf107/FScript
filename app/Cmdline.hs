@@ -16,10 +16,10 @@ showHelp = do
     putStrLn " -h | --help             | Show this help"
     putStrLn " -r | --repl             | Run in interactive REPL mode"
     putStrLn " -m | --monochrome       | REPL ONLY; Show the REPL code in the standard terminal colors"
-    putStrLn "    | --debug-no-stdlib  | Do not import stdlib/Base.fscript; When using --debug-expr-only, use 'put' and 'show', because 'print' is defined in stdlib"
     putStrLn "    | --debug-parse      | REPL ONLY; Show the parser results"
     putStrLn "    | --debug-expr-only  | REPL ONLY; Only evaluate and print out expressions"
     putStrLn "    | --debug-stmnt-only | REPL ONLY; Only evaluate statements"
+    putStrLn "    | --debug-no-stdlib  | Do not import stdlib/Base.fscript; When using --debug-expr-only, use 'put' and 'show', because 'print' is defined in stdlib"
     putStrLn ""
     setSGR [SetColor Foreground Vivid Magenta]
     putStrLn "Github/Documentation: https://github.com/Innf107/FScript"

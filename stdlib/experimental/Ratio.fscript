@@ -42,4 +42,4 @@ showR = \r -> let r_ = shorten r in "(" + (show (get "enum" r_)) + "/" + (show (
 
 <+> = \r1 -> \r2 -> let s1 = (r1 <*> (get "denom" r2)) in shorten (mapEnum (+ (get "enum" r2)) r1);
 
-<-> = \r1 -> \r2 -> 
+<-> = \r1 -> \r2 -> let s1 = (r1 <*> (get "denom" r2)) in shorten (mapEnum (\x -> x - (get "enum" r2)) r1);
