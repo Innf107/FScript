@@ -5,6 +5,7 @@ print = \x -> put (show x);
 printOrExec = \x -> if ((typeof x) == "IO")
     then x
     else print x;
+-- printOrExec = \x -> if (ord (typeof x) "IO") then print x else x;
 not = \x -> if x then False else True;
 eq = \x -> \y -> not (ord x y);
 comp = \f -> \g -> \x -> f (g x);
@@ -76,10 +77,6 @@ gcd_ = \x -> \y -> if y
 
 
 -- Lists
-map = \f -> \l -> if l then let (HT x xs) = l in
-        cons (f x) (map f xs)
-        else [];
-
 mapI = \f -> \l -> mapIS f l 0;
 
 mapIS = \f -> \l -> \i ->
@@ -193,18 +190,23 @@ setAll = \s -> \x -> setAllList (entries s) x;
 
 setAllList = \es -> \r -> if es
     then let (HT x xs) = es in let (T k v) = x in
-    set k v (setAllInner xs r)
+    set k v (setAllList xs r)
     else r;
+
+fromEntries = \es -> setAllList es {};
 
 
 -- FClasses
-show 30 += \x -> if (((typeof x) == "List") && (isString x))
+tclass = \t -> \f -> \x -> if ((typeof x) == t)
+    then f x
+    else throw "Type" ("Not of type " + t);
+
+show 0 30 += \x -> if (((typeof x) == "List") && (isString x))
     then (['"'] + (foldl (\a -> \c -> a + [c]) "" x) + ['"'])
     else throw "Type" "Not a String";
 
-show 20 += \x -> if ((typeof x) == "List")
-    then ("[" + (showListInner x) + "]")
-    else throw "Type" "Not a List";
+
+show 0 20 += tclass "List" \x -> ("[" + (showListInner x) + "]");
 
 showListInner = \l -> if l
     then let (HT x xs) = l in if xs
@@ -212,9 +214,7 @@ showListInner = \l -> if l
         else show x
     else "";
 
-show 20 += \x -> if ((typeof x) == "Record")
-    then ("{" + (showRecInner (entries x)) + "}")
-    else throw "Type" "Not a Record";
+show 0 20 += tclass "Record" \x -> ("{" + (showRecInner (entries x)) + "}");
 
 showRecInner = \l -> if l
     then let (HT x xs) = l in let (T k v) = x in if xs
@@ -222,26 +222,26 @@ showRecInner = \l -> if l
         else (k + ": " + (show v))
     else "";
 
-show 20 += showNum;
+show 0 20 += showNum;
 
-show 20 += \x -> if ((typeof x) == "Char")
-    then ("'" + [x] + "'")
-    else throw "Type" "Not a Char";
+show 0 20 += tclass "Char" \x -> ("'" + [x] + "'");
 
-show 20 += \x -> if ((typeof x) == "Bool")
-    then if x then "True" else "False"
-    else throw "Type" "Not a Bool";
+show 0 20 += tclass "Bool" \x -> if x then "True" else "False";
 
-show 20 += \x -> if ((typeof x) == "IO")
-    then "<IO>"
-    else throw "Type" "Not an IO";
+show 0 20 += tclass "IO" (const "<IO>");
 
-show 20 += \x -> if ((typeof x) == "Function")
-    then "<Function>"
-    else throw "Type" "Not a function";
+show 0 20 += tclass "Function" (const "<Function>");
 
-show 20 += \x -> if ((typeof x) == "Null")
-    then "Null"
-    else throw "Type" "Not Null";
+show 0 20 += tclass "Null" (const "Null");
 
-show 0 += const "<Unknown Type>";
+show 0 0 += const "<Unknown Type>";
+
+
+
+map 1 20 += \f -> tclass "List" \l ->
+    if l then let (HT x xs) = l in
+                 cons (f x) (map f xs)
+                 else [];
+
+map 1 20 += \f -> tclass "Record" (\r -> fromEntries (map f (entries r)));
+

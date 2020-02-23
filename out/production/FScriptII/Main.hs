@@ -1,3 +1,4 @@
+{-# LANGUAGE BlockArguments #-}
 module Main where
 
 import Lib
@@ -40,13 +41,14 @@ updateDests :: ([Destr] -> [Destr]) -> RTState -> RTState
 updateDests f state = RTState {getVals=getVals state, getArgs=getArgs state, getClosures=getClosures state,
                                getDests=f (getDests state), getFClasses=getFClasses state}
 
-insertFClass :: String -> FClassInstance -> RTState -> RTState
-insertFClass name fc state = RTState {getVals=getVals state, getArgs=getArgs state, getClosures=getClosures state,
+insertFClass :: String -> Int -> FClassInstance -> RTState -> RTState
+insertFClass name arity fc state = RTState {getVals=getVals state, getArgs=getArgs state, getClosures=getClosures state,
                                  getDests=getDests state, getFClasses=
-                                 M.insertWith ins name [fc] (getFClasses state)}
+                                 M.insertWith ins name (FClassObj arity [fc] []) (getFClasses state)}
     where
-        ins :: [FClassInstance] -> [FClassInstance] -> [FClassInstance]
-        ins (x:_) ys = L.insertBy (\(FClassInstance i _) (FClassInstance j _) -> j `compare` i) x ys
+        ins :: FClassObj -> FClassObj -> FClassObj
+        ins (FClassObj a fs cls) (FClassObj _ fs' _) = (FClassObj a (ins' fs fs') cls)
+        ins' (x:_) ys = L.insertBy (\(FClassInstance i _) (FClassInstance j _) -> j `compare` i) x ys
 
 emptyState :: RTState
 emptyState = RTState {getVals=M.fromList (nativeFs ++ nativeVals), getArgs=M.empty, getClosures=M.empty,
@@ -56,7 +58,7 @@ emptyState = RTState {getVals=M.fromList (nativeFs ++ nativeVals), getArgs=M.emp
 nativeFs :: [(String, RTValue)]
 nativeFs = (\(x, y) -> (x, NativeF y M.empty)) <$> [("put", putF), ("debugRaw", debugRawF), ("head", headF),
     ("tail", tailF), ("exec", execF), ("typeof", typeofF), ("eval", evalF), ("pureIO", pureIOF), 
-    ("round", roundF), ("showNum", showNumF), ("entries", entriesF)]
+    ("round", roundF), ("showNum", showNumF), ("entries", entriesF), ("debugState", debugStateF)]
 
 nativeVals :: [(String, RTValue)]
 nativeVals = [("add", addF), ("sub", subF), ("ord", ordF), ("mul", mulF), ("div", divF), ("cons", consF),
@@ -99,7 +101,7 @@ runFile path debugParser exprOnly noStdLib = do
 
 runAsRepl :: Bool -> Bool -> Bool -> RTState -> IO ()
 runAsRepl debugParse noPrint exprOnly state = do
-    input <- (fromMaybe "") <$> (runInputT (Settings completeFilename (Just "history.txt") True) $ (getInputLine "+> "))
+    input <- (fromMaybe "") <$> (runInputT (Settings completeFilename (Just $ fscriptDir ++ "history.txt") True) $ (getInputLine "+> "))
     case input of
         "exit" -> return ()
         ('!':cmd) -> callCommand cmd >> runAsRepl debugParse noPrint exprOnly state
@@ -139,7 +141,7 @@ runStatement (Def (DestDef dn ns e))state = case find (\(Destr dn' _ _) -> dn ==
         return $ (updateVals (insertAll ((\(n, ne) -> (n, evalDest v e ne state)) <$> (zip ns exps))) state, False)
 
 runStatement (DefDest dest)         state = return $ (updateDests (dest:) state, False)
-runStatement (DefFClass name fc)       state = return $ (insertFClass name fc state, False)
+runStatement (DefFClass name arity fc)       state = return $ (insertFClass name arity fc state, False)
 runStatement (Run e)                state = case eval e state of
     (IOV a)                         -> runIOAction a state >> return (state, False)
     (ExceptionV eType eMsg)          -> (putStrLn $ eType  ++ " Exception: '" ++ eMsg ++ "'") >> return (state, True)
@@ -165,7 +167,8 @@ runIOAction (Composed a f) state = case a of
                        x     -> putStrLn $ "IO actions can only be composed with Functions that return other IO actions. '" ++ show x ++ "is not an IO action"
 
 
-stdlibDir = "/etc/fscript/modules/"
+fscriptDir = "/etc/fscript/"
+stdlibDir = fscriptDir ++ "modules/"
 
 runImport :: String -> ImportType -> Bool -> RTState -> IO RTState
 runImport path iType isQualified state = do
@@ -192,7 +195,7 @@ runImport path iType isQualified state = do
                               isDef _ = False
                               isDefDest (DefDest _) = True
                               isDefDest _ = False
-                              isDefFC (DefFClass _ _) = True
+                              isDefFC (DefFClass _ _ _) = True
                               isDefFC _ = False
                               qF (Def (NormalDef did dex)) = if isQualified then Def $ NormalDef (getImportFromPath path did) dex else Def $ NormalDef did dex
                               --TODO: qF (Def (DestDef))
@@ -206,26 +209,37 @@ dEBUG = False
 eval :: Expr -> RTState -> RTValue
 eval (Value (NativeF f cls))    state = traceIf dEBUG "Value NativeF" $ NativeF f (M.unions [(getArgs state), (getClosures state),cls])
 eval (Value val)                state = traceIf dEBUG ("Value " ++ show val) $ val
-eval (FCall fx ax)              state = traceIf dEBUG "FCallStart" $ case av of
+eval (FCall fx ax)              state = case av of
     ExceptionV eType eMsg ->            traceIf dEBUG "Exception in av" $ ExceptionV eType eMsg
     _ -> case eval fx state of
         (FuncV pn ex cls) -> traceIf dEBUG "FCall" eval ex (updateClosures (M.union cls) $ updateArgs (const (M.singleton pn av)) state)
         (NativeF f cls)   -> traceIf dEBUG "FCall NativeF" $ f av (updateClosures (M.union cls) state)
-        (FClass [])       -> traceIf dEBUG "FCall FClass []" $ ExceptionV "NonExhaustiveFClass" $ "FClass cases are not exhaustive!"
-        (FClass ((FClassInstance _ fe):fcs)) -> traceIf dEBUG "FCall FClass" $
-                case eval (FCall fe ax) state of
-                (ExceptionV "Type" _) -> eval (FCall (Value $ FClass fcs) ax) state
-                x -> x
+        (FClass n xs cls) -> traceIf dEBUG "FCall FClass" $ evalFC (FClass n xs cls) cls state state av
         ExceptionV et em  -> traceIf dEBUG "Exception" ExceptionV et em
         x                 -> ExceptionV "Type" $ "Tried to call a value that is not a function! The value was '" ++ show x ++ "'"
-    where av = eval ax state
+    where
+        av = eval ax state
+        evalFC :: RTValue -> [RTValue] -> RTState -> RTState -> RTValue -> RTValue
+        evalFC (FClass _ [] _) icls istate state av = traceIf dEBUG "FCall FClass []" $ ExceptionV "NonExhaustiveFClass" $ "FClass cases are not exhaustive!"
+        evalFC (FClass 0 ((FClassInstance _ fe):fcs) []) icls istate state av = case eval (FCall fe (Value av)) state
+            of
+            (ExceptionV "Type" _) -> evalFC (FClass 0 fcs icls) icls istate istate av
+            x -> x
+
+        evalFC (FClass 0 ((FClassInstance p fe):fcs) cls) icls istate state av = traceIf dEBUG "FCall FClass" $
+            case eval fe state of
+                (FuncV pn ex fcls) -> let (a:as) = cls in evalFC (FClass 0 ((FClassInstance p fe):fcs) as) icls istate (updateClosures (M.insert pn a) state) av
+
+        evalFC (FClass n fcs cls) icls istate state av = (FClass (n - 1) fcs (av:cls))
+
+
 
 eval (Let (NormalDef n vx) ex)  state = traceIf dEBUG "Let NormalDef" $ eval ex (updateArgs (M.insert n (eval vx state)) state)
 eval (Let (DestDef dn ns e) ex) state = traceIf dEBUG "Let DestDef" $ case find (\(Destr dn' _ _) -> dn == dn') (getDests state) of
     Nothing -> ExceptionV "State" ("Destructuring " ++ dn ++ " does not exist!")
     Just (Destr _ v exps) ->
         eval ex (updateArgs (insertAll ((\(n, ne) -> (n, evalDest v e ne state)) <$> (zip ns exps))) state)
-eval (Var n)                    state = traceIf dEBUG ("Var " ++ n) $ case M.lookup n (getArgs state) <|> M.lookup n (getClosures state) <|> M.lookup n (getVals state) <|> (FClass <$> M.lookup n (getFClasses state)) of
+eval (Var n)                 state = traceIf dEBUG ("Var " ++ n) $ case M.lookup n (getArgs state) <|> M.lookup n (getClosures state) <|> M.lookup n (getVals state) <|> ((\(FClassObj n fis cls) -> FClass n fis cls) <$> M.lookup n (getFClasses state)) of
                             Just x  -> x
                             Nothing -> ExceptionV "State" $ "Value " ++ n ++ " does not exist in the current state! \n\nCurrent Args were: " ++
                                 show (getArgs state) ++ "\n\nClosures were: "

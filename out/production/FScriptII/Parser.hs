@@ -22,7 +22,8 @@ data Statement = NOP
                | Import String ImportType Bool
                | Def Definition
                | DefDest Destr
-               | DefFClass String FClassInstance
+-- TODO DefFCArity String Int
+               | DefFClass String Int FClassInstance
                | Run Expr
                deriving (Show, Eq, Read)
 
@@ -61,7 +62,7 @@ data RTValue = NumV Float
              | IOV IOAction
              | FuncV String Expr (M.Map String RTValue)
              | NativeF (RTValue -> RTState -> RTValue) (M.Map String RTValue)
-             | FClass [FClassInstance]
+             | FClass Int [FClassInstance] [RTValue]
              | NullV
              | RecordV [(String, RTValue)]
              | ExceptionV String String
@@ -69,8 +70,10 @@ data RTValue = NumV Float
 
 
 data RTState = RTState {getVals::M.Map String RTValue, getArgs::M.Map String RTValue,
-                        getClosures::M.Map String RTValue, getDests::[Destr], getFClasses::M.Map String [FClassInstance]}
+                        getClosures::M.Map String RTValue, getDests::[Destr], getFClasses::M.Map String FClassObj}
                         deriving (Show, Eq, Read)
+
+data FClassObj = FClassObj Int [FClassInstance] [RTValue] deriving (Show, Eq, Read)
 
 data Destr = Destr String String [Expr] deriving (Show, Eq, Read)
 
@@ -161,12 +164,14 @@ defFClassS :: Parser Statement
 defFClassS = do
             name <- identifier <|> operator
             spaces
+            arity <- read <$> (many1 digit)
+            spaces
             prec <- read <$> (many1 digit)
             spaces
             string "+="
             spaces
             e <- expr
-            return $ DefFClass name $ FClassInstance prec e
+            return $ DefFClass name arity $ FClassInstance prec e
 
 commentS :: Parser Statement
 commentS = (spaces >> string "--" >> many (noneOf "\n") >> return NOP) <?> "comment"

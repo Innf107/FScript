@@ -150,6 +150,10 @@ divF = FuncV "x" (Value $ NativeF divFInner M.empty) M.empty
 debugRawF :: RTValue -> RTState -> RTValue
 debugRawF x state = strAsRTV $ show x
 
+
+debugStateF :: RTValue -> RTState -> RTValue
+debugStateF _ state = strAsRTV (show state)
+
 headF :: RTValue -> RTState -> RTValue
 headF x state = case x of
     ListV []    -> NullV
@@ -174,7 +178,7 @@ typeofF (NumV _)         state = strAsRTV "Num"
 typeofF (BoolV _)        state = strAsRTV "Bool"
 typeofF (FuncV _ _ _)    state = strAsRTV "Function"
 typeofF (NativeF _ _)    state = strAsRTV "Function"
-typeofF (FClass _)       state = strAsRTV "Function"
+typeofF (FClass _ _ _)   state = strAsRTV "Function"
 typeofF (NullV)          state = strAsRTV "Null"
 typeofF (RecordV _)      state = strAsRTV "Record"
 typeofF (ExceptionV _ _) state = strAsRTV "Exception"

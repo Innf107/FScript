@@ -1,12 +1,5 @@
-import stdlib/experimental/Graph;
+show 0 30 += \x -> if (((typeof x) == "List") && (isString x))
+    then (['"'] + (foldl (\a -> \c -> a + [c]) "" x) + ['"'])
+    else throw "Type" "Not a String";
 
-config = {
-    height:60,
-    scaleX:1,
-    scaleY:1
-};
-
-f = \x -> e ^ x;
-
-plotL config (f <$> (rangeStep 0 10 0.1));
-
+put (show "5")
