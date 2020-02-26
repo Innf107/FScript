@@ -27,24 +27,28 @@ import qualified Data.Map as M
 
 updateVals :: (M.Map String RTValue -> M.Map String RTValue) -> RTState -> RTState
 updateVals f state = RTState {getVals=f(getVals state), getArgs=getArgs state, getClosures = (getClosures state),
-                              getDests=getDests state, getFClasses=getFClasses state}
+                              getDests=getDests state, getFClasses=getFClasses state, getStackTrace=getStackTrace state}
 
 updateArgs :: (M.Map String RTValue -> M.Map String RTValue) -> RTState -> RTState
 updateArgs f state = RTState {getVals=getVals state, getArgs=f (getArgs state), getClosures = (getClosures state),
-                              getDests=getDests state, getFClasses=getFClasses state}
+                              getDests=getDests state, getFClasses=getFClasses state, getStackTrace=getStackTrace state}
 
 updateClosures :: (M.Map String RTValue -> M.Map String RTValue) -> RTState -> RTState
 updateClosures f state = RTState {getVals=getVals state, getArgs= (getArgs state), getClosures =f (getClosures state),
-                                  getDests=getDests state, getFClasses=getFClasses state}
+                                  getDests=getDests state, getFClasses=getFClasses state, getStackTrace=getStackTrace state}
 
 updateDests :: ([Destr] -> [Destr]) -> RTState -> RTState
 updateDests f state = RTState {getVals=getVals state, getArgs=getArgs state, getClosures=getClosures state,
-                               getDests=f (getDests state), getFClasses=getFClasses state}
+                               getDests=f (getDests state), getFClasses=getFClasses state, getStackTrace=getStackTrace state}
+
+updateStackTrace :: ([String] -> [String]) -> RTState -> RTState
+updateStackTrace f state = RTState {getVals=getVals state, getArgs=getArgs state, getClosures=getClosures state,
+                               getDests=getDests state, getFClasses=getFClasses state, getStackTrace=f $ getStackTrace state}
 
 insertFClass :: String -> Int -> FClassInstance -> RTState -> RTState
 insertFClass name arity fc state = RTState {getVals=getVals state, getArgs=getArgs state, getClosures=getClosures state,
                                  getDests=getDests state, getFClasses=
-                                 M.insertWith ins name (FClassObj arity [fc] []) (getFClasses state)}
+                                 M.insertWith ins name (FClassObj arity [fc] []) (getFClasses state), getStackTrace=getStackTrace state}
     where
         ins :: FClassObj -> FClassObj -> FClassObj
         ins (FClassObj a fs cls) (FClassObj _ fs' _) = (FClassObj a (ins' fs fs') cls)
@@ -52,16 +56,16 @@ insertFClass name arity fc state = RTState {getVals=getVals state, getArgs=getAr
 
 emptyState :: RTState
 emptyState = RTState {getVals=M.fromList (nativeFs ++ nativeVals), getArgs=M.empty, getClosures=M.empty,
-                      getDests=[], getFClasses=M.empty}
+                      getDests=[], getFClasses=M.empty, getStackTrace=[]}
 
 
 nativeFs :: [(String, RTValue)]
 nativeFs = (\(x, y) -> (x, NativeF y M.empty)) <$> [("put", putF), ("debugRaw", debugRawF), ("head", headF),
     ("tail", tailF), ("exec", execF), ("typeof", typeofF), ("eval", evalF), ("pureIO", pureIOF), 
-    ("round", roundF), ("showNum", showNumF), ("entries", entriesF), ("debugState", debugStateF)]
+    ("round", roundF), ("showNum", showNumF), ("entries", entriesF), ("debugState", debugStateF), ("toCode", toCodeF)]
 
 nativeVals :: [(String, RTValue)]
-nativeVals = [("add", addF), ("sub", subF), ("ord", ordF), ("mul", mulF), ("div", divF), ("cons", consF),
+nativeVals = [("addNum", addNumF), ("subNum", subNumF), ("ord", ordF), ("mulNum", mulNumF), ("divNum", divNumF), ("cons", consF),
               ("get", getF), ("set", setF), ("compIO", compIOF), ("readLine", readLineF), ("throw", throwF),
               ("rem", remF)]
 
@@ -144,7 +148,7 @@ runStatement (DefDest dest)         state = return $ (updateDests (dest:) state,
 runStatement (DefFClass name arity fc)       state = return $ (insertFClass name arity fc state, False)
 runStatement (Run e)                state = case eval e state of
     (IOV a)                         -> runIOAction a state >> return (state, False)
-    (ExceptionV eType eMsg)          -> (putStrLn $ eType  ++ " Exception: '" ++ eMsg ++ "'") >> return (state, True)
+    (ExceptionV eType eMsg st)      -> (putStrLn $ eType  ++ " Exception: '" ++ eMsg ++ "'" ++ "\n\nStackTrace: " ++ showST st) >> return (state, True)
     _                               -> putStrLn "Can only run values of type IO!" >> return (state, True)
 
 evalDest :: String -> Expr -> Expr -> RTState -> RTValue
@@ -210,20 +214,26 @@ eval :: Expr -> RTState -> RTValue
 eval (Value (NativeF f cls))    state = traceIf dEBUG "Value NativeF" $ NativeF f (M.unions [(getArgs state), (getClosures state),cls])
 eval (Value val)                state = traceIf dEBUG ("Value " ++ show val) $ val
 eval (FCall fx ax)              state = case av of
-    ExceptionV eType eMsg ->            traceIf dEBUG "Exception in av" $ ExceptionV eType eMsg
-    _ -> case eval fx state of
-        (FuncV pn ex cls) -> traceIf dEBUG "FCall" eval ex (updateClosures (M.union cls) $ updateArgs (const (M.singleton pn av)) state)
-        (NativeF f cls)   -> traceIf dEBUG "FCall NativeF" $ f av (updateClosures (M.union cls) state)
-        (FClass n xs cls) -> traceIf dEBUG "FCall FClass" $ evalFC (FClass n xs cls) cls state state av
-        ExceptionV et em  -> traceIf dEBUG "Exception" ExceptionV et em
-        x                 -> ExceptionV "Type" $ "Tried to call a value that is not a function! The value was '" ++ show x ++ "'"
+    ExceptionV eType eMsg st ->            traceIf dEBUG "Exception in av" $ ExceptionV eType eMsg st
+    _ -> let state' = updateStackTrace ((toFunName fx):) state in
+        case eval fx state' of
+            (FuncV pn ex cls)   -> traceIf dEBUG "FCall" eval ex (updateClosures (M.union cls) $ updateArgs (const (M.singleton pn av)) state')
+            (NativeF f cls)     -> traceIf dEBUG "FCall NativeF" $ f av (updateClosures (M.union cls) state')
+            (FClass n xs cls)   -> traceIf dEBUG "FCall FClass" $ evalFC (FClass n xs cls) cls state' state' av
+            ExceptionV et em st -> traceIf dEBUG "Exception" ExceptionV et em st
+            x                   -> ExceptionV "Type" ("Tried to call a value that is not a function! The value was '" ++ show x ++ "'") (getStackTrace state)
     where
+        toFunName (Var n) = n
+        toFunName (Literal (LambdaL _ _)) = "[Lambda]"
+        toFunName (If _ _ _) = "[If]"
+        toFunName (FCall fe _) = "[FCall(" ++ (toFunName fe) ++ ")]"
+        toFunName _ = "[Function]"
         av = eval ax state
         evalFC :: RTValue -> [RTValue] -> RTState -> RTState -> RTValue -> RTValue
-        evalFC (FClass _ [] _) icls istate state av = traceIf dEBUG "FCall FClass []" $ ExceptionV "NonExhaustiveFClass" $ "FClass cases are not exhaustive!"
+        evalFC (FClass _ [] _) icls istate state av = traceIf dEBUG "FCall FClass []" $ ExceptionV "NonExhaustiveFClass" ("FClass cases are not exhaustive!") (getStackTrace state)
         evalFC (FClass 0 ((FClassInstance _ fe):fcs) []) icls istate state av = case eval (FCall fe (Value av)) state
             of
-            (ExceptionV "Type" _) -> evalFC (FClass 0 fcs icls) icls istate istate av
+            (ExceptionV "FClass" _ _) -> evalFC (FClass 0 fcs icls) icls istate istate av
             x -> x
 
         evalFC (FClass 0 ((FClassInstance p fe):fcs) cls) icls istate state av = traceIf dEBUG "FCall FClass" $
@@ -233,25 +243,25 @@ eval (FCall fx ax)              state = case av of
         evalFC (FClass n fcs cls) icls istate state av = (FClass (n - 1) fcs (av:cls))
 
 
-
 eval (Let (NormalDef n vx) ex)  state = traceIf dEBUG "Let NormalDef" $ eval ex (updateArgs (M.insert n (eval vx state)) state)
 eval (Let (DestDef dn ns e) ex) state = traceIf dEBUG "Let DestDef" $ case find (\(Destr dn' _ _) -> dn == dn') (getDests state) of
-    Nothing -> ExceptionV "State" ("Destructuring " ++ dn ++ " does not exist!")
+    Nothing -> ExceptionV "State" ("Destructuring " ++ dn ++ " does not exist!") (getStackTrace state)
     Just (Destr _ v exps) ->
         eval ex (updateArgs (insertAll ((\(n, ne) -> (n, evalDest v e ne state)) <$> (zip ns exps))) state)
 eval (Var n)                 state = traceIf dEBUG ("Var " ++ n) $ case M.lookup n (getArgs state) <|> M.lookup n (getClosures state) <|> M.lookup n (getVals state) <|> ((\(FClassObj n fis cls) -> FClass n fis cls) <$> M.lookup n (getFClasses state)) of
                             Just x  -> x
-                            Nothing -> ExceptionV "State" $ "Value " ++ n ++ " does not exist in the current state! \n\nCurrent Args were: " ++
+                            Nothing -> ExceptionV "State" ("Value " ++ n ++ " does not exist in the current state! \n\nCurrent Args were: " ++
                                 show (getArgs state) ++ "\n\nClosures were: "
-                                ++ show (getClosures state)
+                                ++ show (getClosures state)) (getStackTrace state)
+
 eval (If c th el)               state = traceIf dEBUG "If" $ case (eval c state) of
-    BoolV False   -> eval el state
-    NumV 0        -> eval el state
-    NullV         -> eval el state
-    ListV []      -> eval el state
+    BoolV False      -> eval el state
+    NumV 0           -> eval el state
+    NullV            -> eval el state
+    ListV []         -> eval el state
     RecordV []       -> eval el state
-    ExceptionV t m -> ExceptionV t m
-    _             -> eval th state
+    ExceptionV t m s -> ExceptionV t m s
+    _                -> eval th state
 
 eval (Literal l)                state = traceIf dEBUG ("Literal " ++ show l) $ case l of
     NumL x       -> NumV x
@@ -271,12 +281,16 @@ eval (Literal l)                state = traceIf dEBUG ("Literal " ++ show l) $ c
               ex = find (isException . snd) args
 
 isException :: RTValue -> Bool
-isException (ExceptionV _ _) = True
+isException (ExceptionV _ _ _) = True
 isException _ = False
 
 evalF :: RTValue -> RTState -> RTValue
 evalF x state = case rtVAsMStr x of
     Just s -> case parseEval s of
-        Left e -> ExceptionV "Parse" $ show e
+        Left e -> ExceptionV "Parse" (show e) (getStackTrace state)
         Right ex -> eval ex state
-    Nothing -> ExceptionV "Type" $ "Can only evaluate Strings. '" ++ show x ++ "' is not a String"
+    Nothing -> ExceptionV "Type" ("Can only evaluate Strings. '" ++ show x ++ "' is not a String") (getStackTrace state)
+
+
+showST :: [String] -> String
+showST st = if (null st) then "" else foldl1 (\acc -> \cur -> acc ++ " <- " ++ cur) st

@@ -2,10 +2,12 @@
 id = \x -> x;
 const = \x -> \y -> x;
 print = \x -> put (show x);
+printP = \x -> put (showP x);
 printOrExec = \x -> if ((typeof x) == "IO")
     then x
     else print x;
 -- printOrExec = \x -> if (ord (typeof x) "IO") then print x else x;
+putRaw = \x -> put (debugRaw x);
 not = \x -> if x then False else True;
 eq = \x -> \y -> not (ord x y);
 comp = \f -> \g -> \x -> f (g x);
@@ -21,6 +23,22 @@ flip = \f -> \x -> \y -> f y x;
 == = eq;
 /= = \x -> \y -> not (x == y);
 != = /=;
+
+is = \x -> \t -> ((typeof x) == t) || (if ((typeof x) == "Record") then ((get "Type" x) == t) else False);
+
+isT = flip is;
+
+all = \f -> \l -> if (l `is` "List") then
+    if l
+    then let (HT x xs) = l in
+            if f x
+            then all f xs
+            else False
+    else True
+
+else False;
+
+isString = \l -> (all (isT "Char") l);
 
 -- Boolean
 and = \x -> \y -> if x then y else x;
@@ -58,13 +76,9 @@ rootInner = \r -> \x -> \guess -> if (((abs ((powN guess r) - x)) < (0.1 * x)) |
 max = \x -> \y -> if x > y then x else y;
 min = flip max;
 
-* = mul;
-+ = add;
-/ = div;
-- = sub;
 ^ = powN;
-divBy = flip div;
-subBy = flip sub;
+divBy = flip -;
+subBy = flip -;
 
 abs = \x -> if (x < 0) then (0 - x) else x;
 
@@ -77,19 +91,21 @@ gcd_ = \x -> \y -> if y
 
 
 -- Lists
+--foldl 2 20 += \x -> \y -> \z -> "Test?";
+foldlList = \f -> \z -> tclass "List"
+                              \l -> if l then let (HT x xs) = l in
+                              (foldlList f (f z x) xs)
+                              else z;
+
+foldl = foldlList;
+
+
 mapI = \f -> \l -> mapIS f l 0;
 
 mapIS = \f -> \l -> \i ->
         if l
         then let (HT x xs) = l in
             cons (f x i) (mapIS f xs (i + 1))
-        else
-            [];
-
-flatMap = \f -> \l ->
-        if l
-        then let (HT x xs) = l in
-            ((f x) + (flatMap f xs))
         else
             [];
 
@@ -115,33 +131,6 @@ repeat = \x -> \i -> if (i <= 0)
     then []
     else (x : (repeat x (i - 1)));
 
-filter = \f -> \l -> if l then let x = head l in let xs = tail l in
-    if f x
-        then cons x (filter f xs)
-        else filter f xs
-    else [];
-
-foldl = \f -> \z -> \l -> if l then let x = head l in let xs = tail l in
-    (foldl f (f z x) xs)
-    else z;
-
-length = \l -> if l
-    then add 1 (length (tail l))
-    else 0;
-
-reverse = \l -> if l
-    then let (HT x xs) = l in ((reverse xs) + [x])
-    else [];
-
-getAt = \n -> \l -> if l
-    then let (HT x xs) = l in
-        if n
-            then getAt (sub n 1) xs
-            else x
-    else Null;
-
-!! = getAt;
-
 <<HT l>> head l @ tail l;
 
 <<T l>> head l @ getAt 1 l @ getAt 2 l @ getAt 3 l @ getAt 4 l @ getAt 5 l @ getAt 6 l @ getAt 7 l;
@@ -154,12 +143,7 @@ take = \i -> \l -> if ((toBool l) && (i > 0))
 
 skipLast = \i -> \l -> take ((length l) - i) l;
 
-all = \f -> foldl (\acc -> \cur -> acc && (f cur)) True;
-
 any = \f -> foldl (\acc -> \cur -> acc || (f cur)) False;
-
-isString = all (\x -> (typeof x) == "Char");
-
 
 
 -- IO
@@ -182,7 +166,6 @@ null = Null;
 false = False;
 true = True;
 
-
 -- Records
 update = \k -> \f -> \r -> set k (f (get k r)) r;
 
@@ -193,17 +176,24 @@ setAllList = \es -> \r -> if es
     set k v (setAllList xs r)
     else r;
 
-fromEntries = \es -> setAllList es {};
+fromEntries = \es -> setAllList (reverse es) {};
 
 
 -- FClasses
-tclass = \t -> \f -> \x -> if ((typeof x) == t)
-    then f x
-    else throw "Type" ("Not of type " + t);
+tclass = \tl -> \f -> if (tl && (isString tl))
+    then tclass [tl] f
+    else if tl
+        then let (HT t ts) = tl in
+            \y -> if (y `is` t)
+                then tclass ts (f y)
+                else throw "FClass" ("Not Type " + t)
+        else f;
 
-show 0 30 += \x -> if (((typeof x) == "List") && (isString x))
+
+
+show 0 30 += \x -> if ((x `is` "List") && x && (isString x))
     then (['"'] + (foldl (\a -> \c -> a + [c]) "" x) + ['"'])
-    else throw "Type" "Not a String";
+    else throw "FClass" "Not a String";
 
 
 show 0 20 += tclass "List" \x -> ("[" + (showListInner x) + "]");
@@ -222,7 +212,7 @@ showRecInner = \l -> if l
         else (k + ": " + (show v))
     else "";
 
-show 0 20 += showNum;
+show 0 20 += tclass "Num" showNum;
 
 show 0 20 += tclass "Char" \x -> ("'" + [x] + "'");
 
@@ -236,12 +226,90 @@ show 0 20 += tclass "Null" (const "Null");
 
 show 0 0 += const "<Unknown Type>";
 
+showP = \x -> showPInner x 0;
+
+showPInner 0 20 += tclass ["Record", "Num"] \r -> \i-> showPRecInner r i ;
+
+showPRecInner = \r -> \i  -> let spaces = (repeat ' ' (i * 2)) in
+    spaces + "{\n" + (showPRecInner2 (entries r) (i + 1)) + "\n" + spaces + "}";
+
+showPRecInner2 = \es -> \i -> let spaces = (repeat ' ' (i * 2)) in
+    if es then let (HT x xs) = es in let (T k v) = x in
+        let sx = (spaces + k + ": " + (if ((typeof v) == "Record") then "\n" else "") + (showPInner v i)) in
+        if xs then (sx + ",\n" + (showPRecInner2 xs i))
+        else sx
+    else "";
 
 
-map 1 20 += \f -> tclass "List" \l ->
+showPInner 0 0 += \x -> const (show x);
+
+
+map 1 20 += tclass ["Function", "List"] \f -> \l ->
     if l then let (HT x xs) = l in
                  cons (f x) (map f xs)
                  else [];
 
-map 1 20 += \f -> tclass "Record" (\r -> fromEntries (map f (entries r)));
+map 1 20 += tclass ["Function", "Record"] \f -> \r -> fromEntries (map f (entries r));
+
++ 1 20 += tclass ["Num", "Num"] addNum;
+
++ 1 20 += tclass ["List", "List"] \a -> \b -> if a
+        then let (HT x xs) = a in (x : (xs + b))
+        else b;
+
++ 1 10 += tclass ["Bool", "Bool"] \x -> \y -> x || y;
+
+- 1 20 += tclass ["Num", "Num"] subNum;
+
+- 1 20 += tclass ["Bool", "Bool"] \x -> \y -> if y then False else x;
+
+-- Second parameter type ignored on purpose!
+- 1 10 += tclass "List" (flip delete);
+
+- 1 20 += tclass ["List", "List"] \xs -> \ys -> foldl (\a -> \c -> delete c a) xs ys;
+
+* 1 20 += tclass ["Num", "Num"] mulNum;
+
+* 1 20 += tclass ["List", "Num"] \l -> \n -> flatMap id (repeat l n);
+
+/ 1 20 += tclass ["Num", "Num"] divNum;
+
+delete = \y -> \l -> if l
+    then let (HT x xs) = l in
+        if (x == y)
+        then xs
+        else (x:(delete y xs))
+    else [];
+
+filter 1 20 += tclass ["Function", "List"] \f -> \l -> if l then let x = head l in let xs = tail l in
+    if f x
+        then cons x (filter f xs)
+        else filter f xs
+    else [];
+
+length 0 20 += tclass "List"
+    \l -> if l
+    then (1 + (length (tail l)))
+    else 0;
+
+reverse 0 20 += tclass "List"
+    \l -> if l
+    then let (HT x xs) = l in ((reverse xs) + [x])
+    else [];
+
+getAt 1 20 += tclass ["Num", "List"] \n -> \l -> if l
+    then let (HT x xs) = l in
+        if n
+            then getAt (n - 1) xs
+            else x
+    else Null;
+
+flatMap 1 20 += tclass ["Function", "List"] \f -> \l ->
+        if l
+        then let (HT x xs) = l in
+            ((f x) + (flatMap f xs))
+        else
+            [];
+
+!! = \x -> \l -> getAt x l;
 

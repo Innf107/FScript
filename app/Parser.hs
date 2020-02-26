@@ -65,12 +65,14 @@ data RTValue = NumV Float
              | FClass Int [FClassInstance] [RTValue]
              | NullV
              | RecordV [(String, RTValue)]
-             | ExceptionV String String
+             | ExceptionV String String [String]
              deriving (Show, Eq, Read)
 
 
 data RTState = RTState {getVals::M.Map String RTValue, getArgs::M.Map String RTValue,
-                        getClosures::M.Map String RTValue, getDests::[Destr], getFClasses::M.Map String FClassObj}
+                        getClosures::M.Map String RTValue, getDests::[Destr], 
+                        getFClasses::M.Map String FClassObj,
+                        getStackTrace::[String]}
                         deriving (Show, Eq, Read)
 
 data FClassObj = FClassObj Int [FClassInstance] [RTValue] deriving (Show, Eq, Read)
@@ -406,7 +408,7 @@ escapeC = do
         Just e -> return e
          
 escapes :: [(Char, Char)]
-escapes = [('n', '\n'), ('\\', '\\'), ('\'', '\''), ('"', '"'), ('p', 'π')]
+escapes = [('n', '\n'), ('t', '\t'), ('\\', '\\'), ('\'', '\''), ('"', '"'), ('p', 'π')]
          
 listL :: Parser Lit
 listL = do
