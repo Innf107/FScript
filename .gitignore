@@ -1,4 +1,6 @@
 .stack-work/
 FScriptII.cabal
 *~
+.idea/workspace.xml
 fscript.history
+test.fscript

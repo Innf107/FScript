@@ -1,5 +1,0 @@
-show 0 30 += \x -> if (((typeof x) == "List") && (isString x))
-    then (['"'] + (foldl (\a -> \c -> a + [c]) "" x) + ['"'])
-    else throw "Type" "Not a String";
-
-put (show "5")

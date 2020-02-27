@@ -71,6 +71,7 @@ nativeVals = [("addNum", addNumF), ("subNum", subNumF), ("ord", ordF), ("mulNum"
 
 main :: IO ()
 main = do
+        fspath <- fromMaybe "~/.fscript/" <$> SE.lookupEnv "FSPATH"
         args <- SE.getArgs
         let repl = "--repl" `elem` args || "-r" `elem` args
         let debugParse = "--debug-parse" `elem` args
@@ -85,30 +86,30 @@ main = do
                 True -> do
                     printSplashScreen
                     when (not monochrome) $ setSGR [SetColor Foreground Vivid Cyan]
-                    state <- if noStdLib then return emptyState else fst <$> runStatement (Import "stdlib/Base" All False) emptyState
-                    runAsRepl debugParse noPrint exprOnly state
-                False -> runFile filePath debugParse exprOnly noStdLib
+                    state <- if noStdLib then return emptyState else fst <$> runStatement (Import "stdlib/Base" All False) emptyState fspath
+                    runAsRepl debugParse noPrint exprOnly state fspath
+                False -> runFile filePath debugParse exprOnly noStdLib fspath
 
 
 
-runFile :: String -> Bool -> Bool -> Bool -> IO ()
-runFile path debugParser exprOnly noStdLib = do
+runFile :: String -> Bool -> Bool -> Bool -> String -> IO ()
+runFile path debugParser exprOnly noStdLib fspath = do
     fileContent <- readFile path
-    state <- if noStdLib then return emptyState else fst <$> runStatement (Import "stdlib/Base" All False) emptyState
+    state <- if noStdLib then return emptyState else fst <$> runStatement (Import "stdlib/Base" All False) emptyState fspath
     let statements = case exprOnly of
             False -> parseFile fileContent path
             True  -> parseFileExpr fileContent path
     case statements of
         Left e -> print e
-        Right sts -> runStatements sts state >> return ()
+        Right sts -> runStatements sts state fspath >> return ()
 
 
-runAsRepl :: Bool -> Bool -> Bool -> RTState -> IO ()
-runAsRepl debugParse noPrint exprOnly state = do
-    input <- (fromMaybe "") <$> (runInputT (Settings completeFilename (Just $ fscriptDir ++ "history.txt") True) $ (getInputLine "+> "))
+runAsRepl :: Bool -> Bool -> Bool -> RTState -> String -> IO ()
+runAsRepl debugParse noPrint exprOnly state fspath = do
+    input <- (fromMaybe "") <$> (runInputT (Settings completeFilename (Just $ fspath ++ "history.txt") True) $ (getInputLine "+> "))
     case input of
         "exit" -> return ()
-        ('!':cmd) -> callCommand cmd >> runAsRepl debugParse noPrint exprOnly state
+        ('!':cmd) -> callCommand cmd >> runAsRepl debugParse noPrint exprOnly state fspath
         _ -> do
             let line = input ++ ";"
             let statements = case exprOnly of
@@ -119,34 +120,34 @@ runAsRepl debugParse noPrint exprOnly state = do
                         Right sts -> do
                             let replSTS = if noPrint then sts else map statementAsRepl sts
                             when debugParse $ print replSTS
-                            (state', isE) <- runStatements replSTS state
+                            (state', isE) <- runStatements replSTS state fspath
                             return state'
-            runAsRepl debugParse noPrint exprOnly state'
+            runAsRepl debugParse noPrint exprOnly state' fspath
 
 
 statementAsRepl :: Statement -> Statement
 statementAsRepl (Run ex) = Run (FCall (Var "printOrExec") ex)
 statementAsRepl x = x
 
-runStatements :: [Statement] -> RTState -> IO (RTState, Bool)
-runStatements [] state      = return (state, False)
-runStatements (s:sts) state = do
-    (state', isException) <- runStatement s state
+runStatements :: [Statement] -> RTState -> String -> IO (RTState, Bool)
+runStatements [] state _    = return (state, False)
+runStatements (s:sts) state fspath = do
+    (state', isException) <- runStatement s state fspath
     if isException then return (state, True)
-    else runStatements sts state'
+    else runStatements sts state' fspath
 
-runStatement :: Statement -> RTState -> IO (RTState, Bool)
-runStatement NOP                    state = return (state, False)
-runStatement (Import m iType q)     state = (\x -> (x, False)) <$> runImport m iType q state
-runStatement (Def (NormalDef n e))  state = return $ (updateVals (M.insert n (eval e state)) state, False)
-runStatement (Def (DestDef dn ns e))state = case find (\(Destr dn' _ _) -> dn == dn') (getDests state) of
+runStatement :: Statement -> RTState -> String -> IO (RTState, Bool)
+runStatement NOP                    state _ = return (state, False)
+runStatement (Import m iType q)     state fspath = (\x -> (x, False)) <$> runImport m iType q state fspath
+runStatement (Def (NormalDef n e))  state _ = return $ (updateVals (M.insert n (eval e state)) state, False)
+runStatement (Def (DestDef dn ns e))state _ = case find (\(Destr dn' _ _) -> dn == dn') (getDests state) of
     Nothing -> putStrLn ("Destructuring " ++ dn ++ "does not exist!") >> return (state, True)
     Just (Destr _ v exps) ->
         return $ (updateVals (insertAll ((\(n, ne) -> (n, evalDest v e ne state)) <$> (zip ns exps))) state, False)
 
-runStatement (DefDest dest)         state = return $ (updateDests (dest:) state, False)
-runStatement (DefFClass name arity fc)       state = return $ (insertFClass name arity fc state, False)
-runStatement (Run e)                state = case eval e state of
+runStatement (DefDest dest)         state _ = return $ (updateDests (dest:) state, False)
+runStatement (DefFClass name arity fc) state _ = return $ (insertFClass name arity fc state, False)
+runStatement (Run e)                state _ = case eval e state of
     (IOV a)                         -> runIOAction a state >> return (state, False)
     (ExceptionV eType eMsg st)      -> (putStrLn $ eType  ++ " Exception: '" ++ eMsg ++ "'" ++ "\n\nStackTrace: " ++ showST st) >> return (state, True)
     _                               -> putStrLn "Can only run values of type IO!" >> return (state, True)
@@ -171,12 +172,9 @@ runIOAction (Composed a f) state = case a of
                        x     -> putStrLn $ "IO actions can only be composed with Functions that return other IO actions. '" ++ show x ++ "is not an IO action"
 
 
-fscriptDir = "/etc/fscript/"
-stdlibDir = fscriptDir ++ "modules/"
-
-runImport :: String -> ImportType -> Bool -> RTState -> IO RTState
-runImport path iType isQualified state = do
-    let fileTries = [path, path ++ ".fscript", stdlibDir ++ path, stdlibDir ++ path ++ ".fscript"]
+runImport :: String -> ImportType -> Bool -> RTState -> String -> IO RTState
+runImport path iType isQualified state fspath = do
+    let fileTries = [path, path ++ ".fscript", fspath ++ "/modules" ++ path, fspath ++ "/modules" ++ path ++ ".fscript"]
     fileM <- findM doesFileExist fileTries
     case fileM of
         Nothing -> putStrLn ("Error! Module '" ++ path ++ "' does not exist!") >> return state
@@ -187,12 +185,12 @@ runImport path iType isQualified state = do
                 Right sts -> do
                     putStrLn ("Importing module at path '" ++ file ++ "'...")
                     case iType of
-                        All          -> do (state', isE) <- runStatements sts' state
+                        All          -> do (state', isE) <- runStatements sts' state fspath
                                            return state'
                         Exposing ids -> let isExposed (Def (NormalDef did _)) = did `elem` (if isQualified then (getImportFromPath path) <$> ids else ids)
                                             --TODO: isExposed (Def (DestDef))
                                             isExposed _ = False
-                                        in fst <$> (runStatements (filter isExposed sts') state)
+                                        in fst <$> (runStatements (filter isExposed sts') state fspath)
 
                               --TODO: isDef (Def (DestDef))
                         where isDef (Def (NormalDef _ _)) = True

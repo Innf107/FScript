@@ -1,0 +1,36 @@
+x = 5;
+id 5
+id 5
+x
+x = 5;
+x
+x = 5
+(print 5) >> (print 3)
+(print 5) >>= (\x -> print 5)
+readLine >>= (\x -> print 5)
+print 5 >>= (\x -> print 5)
+print 5 >> print 3
+readLine >>= put
+readLine >>= put
+readLine >>= print
+readLine >>= print
+readLine >>= print
+readLine >>= print
+compIO (readLine) print 
+readLine >>= print
+print 5 >>= (\x -> print x)
+print 5
+print 5 >> print 3
+show (show [1,2,32,34,4,314,14,5])
+show (show [1,2,32,34,4,314,14,5])
+show [1,2,32,34,4,314,14,5]
+show [1,2,32,34,4,314,14,]
+cake
+show "4"
+"4"
+show 4
+show cake
+print cake
+print show
+cake
+import stdlib/Cake

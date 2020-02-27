@@ -14,7 +14,6 @@ comp = \f -> \g -> \x -> f (g x);
 ° = comp;
 ∘ = °;
 toBool = not ∘ not;
->> = comp;
 flip = \f -> \x -> \y -> f y x;
 |> = \x -> \f -> f x;
 -- No right associativity yet
@@ -132,6 +131,10 @@ repeat = \x -> \i -> if (i <= 0)
     else (x : (repeat x (i - 1)));
 
 <<HT l>> head l @ tail l;
+<<HT2 l>> head l @ getAt 1 l @ tail l;
+<<HT3 l>> head l @ getAt 1 l @ getAt 2 l @ tail l;
+<<HT4 l>> head l @ getAt 1 l @ getAt 2 l @ getAt 3 l @ tail l;
+<<HT5 l>> head l @ getAt 1 l @ getAt 2 l @ getAt 3 l @ getAt 4 l @ tail l;
 
 <<T l>> head l @ getAt 1 l @ getAt 2 l @ getAt 3 l @ getAt 4 l @ getAt 5 l @ getAt 6 l @ getAt 7 l;
 
@@ -147,11 +150,11 @@ any = \f -> foldl (\acc -> \cur -> acc || (f cur)) False;
 
 
 -- IO
->>= = compIO;
+>>= 1 20 += tclass ["IO", "Function"] compIO;
 
 >> = \x -> \y -> x >>= (const y);
 
-compIOForever = \a -> \f -> compIO a (\x -> compIO (f x) (\y -> compIOForever a f));
+compIOForever = \a -> \f -> a >>= (\x -> (f x) >>= (\y -> compIOForever a f));
 
 doAll = \l -> if l
     then let (HT x xs) = l in (x >> (doAll xs))
