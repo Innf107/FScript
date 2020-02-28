@@ -184,3 +184,11 @@ g x = (tclass ["List"] (f x))
 ("t",ListV [CharV 'F',CharV 'u',CharV 'n',CharV 'c',CharV 't',CharV 'i',CharV 'o',CharV 'n']),
 ("tl",ListV [ListV [CharV 'F',CharV 'u',CharV 'n',CharV 'c',CharV 't',CharV 'i',CharV 'o',CharV 'n'],ListV [CharV 'L',CharV 'i',CharV 's',CharV 't']]),
 ("ts",ListV [ListV [CharV 'L',CharV 'i',CharV 's',CharV 't']]),
+
+
+
+(FCall
+    (FCall
+        (FCall (Var "typeof") (Var "x"))
+        (Var "=="))
+    (Literal (ListL [Literal (CharL 'I'),Literal (CharL 'O')])))

@@ -1,6 +1,6 @@
 module NativeFs where
 
-import Parser
+import Types
 import Data.Maybe
 import Lib
 import Data.List

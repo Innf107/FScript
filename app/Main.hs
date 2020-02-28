@@ -2,7 +2,8 @@
 module Main where
 
 import Lib
-import Parser
+import Parser2
+import Types
 import qualified System.Environment as SE
 import Data.List as L
 import Control.Monad

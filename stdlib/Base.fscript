@@ -11,17 +11,17 @@ putRaw = \x -> put (debugRaw x);
 not = \x -> if x then False else True;
 eq = \x -> \y -> not (ord x y);
 comp = \f -> \g -> \x -> f (g x);
-° = comp;
-∘ = °;
+(°) = comp;
+(∘) = (°);
 toBool = not ∘ not;
 flip = \f -> \x -> \y -> f y x;
-|> = \x -> \f -> f x;
+(|>) = \x -> \f -> f x;
 -- No right associativity yet
 -- <| = flip |>;
 -- $ = <|;
-== = eq;
-/= = \x -> \y -> not (x == y);
-!= = /=;
+(==) = eq;
+(/=) = \x -> \y -> not (x == y);
+(!=) = (/=);
 
 is = \x -> \t -> ((typeof x) == t) || (if ((typeof x) == "Record") then ((get "Type" x) == t) else False);
 
@@ -42,14 +42,14 @@ isString = \l -> (all (isT "Char") l);
 -- Boolean
 and = \x -> \y -> if x then y else x;
 or  = \x -> \y -> if x then x else y;
-&&  = and;
-||  = or;
+(&&)  = and;
+(||)  = or;
 lt  = \x -> \y -> eq -1 (ord x y);
-<   = lt;
+(<)   = lt;
 gt  = \x -> \y -> eq 1 (ord x y);
->   = gt;
-<=  = \x -> \y -> not (x > y);
->=  = \x -> \y -> not (x < y);
+(>)   = gt;
+(<=)  = \x -> \y -> not (x > y);
+(>=)  = \x -> \y -> not (x < y);
 
 
 -- Math
@@ -75,9 +75,9 @@ rootInner = \r -> \x -> \guess -> if (((abs ((powN guess r) - x)) < (0.1 * x)) |
 max = \x -> \y -> if x > y then x else y;
 min = flip max;
 
-^ = powN;
-divBy = flip -;
-subBy = flip -;
+(^) = powN;
+divBy = flip (/);
+subBy = flip (-);
 
 abs = \x -> if (x < 0) then (0 - x) else x;
 
@@ -108,8 +108,8 @@ mapIS = \f -> \l -> \i ->
         else
             [];
 
-<$> = map;
-: = cons;
+(<$>) = map;
+(:) = cons;
 
 range = \s -> \e -> if (s >= e)
                     then []
@@ -119,11 +119,11 @@ rangeStep = \s -> \e -> \step -> if (s >= e)
                                  then []
                                  else cons s (rangeStep (s + step) e step);
 
-:: = range;
+(::) = range;
 
 rangeI = \s -> \e -> range s (e + 1);
 
-::+ = rangeI;
+(::+) = rangeI;
 
 
 repeat = \x -> \i -> if (i <= 0)
@@ -150,9 +150,9 @@ any = \f -> foldl (\acc -> \cur -> acc || (f cur)) False;
 
 
 -- IO
->>= 1 20 += tclass ["IO", "Function"] compIO;
+(>>=) 1 20 += tclass ["IO", "Function"] compIO;
 
->> = \x -> \y -> x >>= (const y);
+(>>) = \x -> \y -> x >>= (const y);
 
 compIOForever = \a -> \f -> a >>= (\x -> (f x) >>= (\y -> compIOForever a f));
 
@@ -198,6 +198,7 @@ show 0 30 += \x -> if ((x `is` "List") && x && (isString x))
     then (['"'] + (foldl (\a -> \c -> a + [c]) "" x) + ['"'])
     else throw "FClass" "Not a String";
 
+-- \x -> if ((x `is` "List") && x && (isString x)) then (['"'] + (foldl (\a -> \c -> a + [c]) "" x) + ['"']) else throw "FClass" "Not a String"
 
 show 0 20 += tclass "List" \x -> ("[" + (showListInner x) + "]");
 
@@ -254,28 +255,28 @@ map 1 20 += tclass ["Function", "List"] \f -> \l ->
 
 map 1 20 += tclass ["Function", "Record"] \f -> \r -> fromEntries (map f (entries r));
 
-+ 1 20 += tclass ["Num", "Num"] addNum;
+(+) 1 20 += tclass ["Num", "Num"] addNum;
 
-+ 1 20 += tclass ["List", "List"] \a -> \b -> if a
+(+) 1 20 += tclass ["List", "List"] \a -> \b -> if a
         then let (HT x xs) = a in (x : (xs + b))
         else b;
 
-+ 1 10 += tclass ["Bool", "Bool"] \x -> \y -> x || y;
+(+) 1 10 += tclass ["Bool", "Bool"] \x -> \y -> x || y;
 
-- 1 20 += tclass ["Num", "Num"] subNum;
+(-) 1 20 += tclass ["Num", "Num"] subNum;
 
-- 1 20 += tclass ["Bool", "Bool"] \x -> \y -> if y then False else x;
+(-) 1 20 += tclass ["Bool", "Bool"] \x -> \y -> if y then False else x;
 
 -- Second parameter type ignored on purpose!
-- 1 10 += tclass "List" (flip delete);
+(-) 1 10 += tclass "List" (flip delete);
 
-- 1 20 += tclass ["List", "List"] \xs -> \ys -> foldl (\a -> \c -> delete c a) xs ys;
+(-) 1 20 += tclass ["List", "List"] \xs -> \ys -> foldl (\a -> \c -> delete c a) xs ys;
 
-* 1 20 += tclass ["Num", "Num"] mulNum;
+(*) 1 20 += tclass ["Num", "Num"] mulNum;
 
-* 1 20 += tclass ["List", "Num"] \l -> \n -> flatMap id (repeat l n);
+(*) 1 20 += tclass ["List", "Num"] \l -> \n -> flatMap id (repeat l n);
 
-/ 1 20 += tclass ["Num", "Num"] divNum;
+(/) 1 20 += tclass ["Num", "Num"] divNum;
 
 delete = \y -> \l -> if l
     then let (HT x xs) = l in
@@ -314,5 +315,5 @@ flatMap 1 20 += tclass ["Function", "List"] \f -> \l ->
         else
             [];
 
-!! = \x -> \l -> getAt x l;
+(!!) = \x -> \l -> getAt x l;
 
