@@ -192,3 +192,8 @@ g x = (tclass ["List"] (f x))
         (FCall (Var "typeof") (Var "x"))
         (Var "=="))
     (Literal (ListL [Literal (CharL 'I'),Literal (CharL 'O')])))
+
+
+1 + 2 + 3 + 4
+((1 + 2) + 3) + 4
+1 + (2 + (3 + 4))

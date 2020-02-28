@@ -72,7 +72,8 @@ nativeVals = [("addNum", addNumF), ("subNum", subNumF), ("ord", ordF), ("mulNum"
 
 main :: IO ()
 main = do
-        fspath <- fromMaybe "~/.fscript/" <$> SE.lookupEnv "FSPATH"
+        fspath <- SE.getEnv "FSPATH" <|> ((++"/.fscript/") <$> SE.getEnv "HOME")
+        putStrLn fspath
         args <- SE.getArgs
         let repl = "--repl" `elem` args || "-r" `elem` args
         let debugParse = "--debug-parse" `elem` args
@@ -175,7 +176,7 @@ runIOAction (Composed a f) state = case a of
 
 runImport :: String -> ImportType -> Bool -> RTState -> String -> IO RTState
 runImport path iType isQualified state fspath = do
-    let fileTries = [path, path ++ ".fscript", fspath ++ "/modules" ++ path, fspath ++ "/modules" ++ path ++ ".fscript"]
+    let fileTries = [path, path ++ ".fscript", fspath ++ "modules/" ++ path, fspath ++ "modules/" ++ path ++ ".fscript"]
     fileM <- findM doesFileExist fileTries
     case fileM of
         Nothing -> putStrLn ("Error! Module '" ++ path ++ "' does not exist!") >> return state

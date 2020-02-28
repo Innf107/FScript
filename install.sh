@@ -5,7 +5,7 @@ if [ "$FSPATH" = "" ]
 fi
 
 mkdir -p "$FSPATH/modules"
-cp -r stdlib "$FSPATH/modules/stdlib"
+cp -r stdlib "$FSPATH/modules/"
 echo "Installed stdlib into $FSPATH/modules/stdlib"
 touch "$FSPATH/history.txt"
 chmod o=rw "$FSPATH/history.txt"
