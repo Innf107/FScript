@@ -2,7 +2,7 @@
 module Main where
 
 import Lib
-import Parser2
+import Parser
 import Types
 import qualified System.Environment as SE
 import Data.List as L

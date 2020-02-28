@@ -15,12 +15,9 @@ comp = \f -> \g -> \x -> f (g x);
 (∘) = (°);
 toBool = not ∘ not;
 flip = \f -> \x -> \y -> f y x;
-(|>) = \x -> \f -> f x;
--- No right associativity yet
--- <| = flip |>;
--- $ = <|;
+x |> f = f x;
 (==) = eq;
-(/=) = \x -> \y -> not (x == y);
+x /= y = not (x == y);
 (!=) = (/=);
 
 is = \x -> \t -> ((typeof x) == t) || (if ((typeof x) == "Record") then ((get "Type" x) == t) else False);
@@ -48,8 +45,8 @@ lt  = \x -> \y -> eq -1 (ord x y);
 (<)   = lt;
 gt  = \x -> \y -> eq 1 (ord x y);
 (>)   = gt;
-(<=)  = \x -> \y -> not (x > y);
-(>=)  = \x -> \y -> not (x < y);
+x <= y = not (x > y);
+x >= y = not (x < y);
 
 
 -- Math
@@ -152,7 +149,7 @@ any = \f -> foldl (\acc -> \cur -> acc || (f cur)) False;
 -- IO
 (>>=) 1 20 += tclass ["IO", "Function"] compIO;
 
-(>>) = \x -> \y -> x >>= (const y);
+x >> y = x >>= (const y);
 
 compIOForever = \a -> \f -> a >>= (\x -> (f x) >>= (\y -> compIOForever a f));
 
@@ -315,5 +312,5 @@ flatMap 1 20 += tclass ["Function", "List"] \f -> \l ->
         else
             [];
 
-(!!) = \x -> \l -> getAt x l;
+x !! ys = getAt x ys;
 
