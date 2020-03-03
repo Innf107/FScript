@@ -1,3 +1,4 @@
+{-# LANGUAGE BlockArguments #-}
 module Parser where
 
 import Types
@@ -8,6 +9,10 @@ import Text.Parsec.Expr
 import qualified Text.Parsec.Token as T
 import Text.Parsec.Language
 import Data.Either
+import Control.Monad.Identity (Identity)
+import Data.List as L
+import Debug.Trace (traceShow)
+import Data.Bifunctor
 
 type Parser = Parsec String ()
 
@@ -19,8 +24,8 @@ def = emptyDef { T.commentStart = "{-"
                , T.identLetter = alphaNum <|> oneOf "_"
                , T.opStart = oneOf "+-*/~%&§$!#<>|^°∘?:="
                , T.opLetter = oneOf "+-*/~%&§$!#<>|^°∘?:="
-               , T.reservedOpNames = ["$"]
-               , T.reservedNames = ["if", "then", "else", "import", "exposing", "qualified", "let", "in", "True", "False", "Null"]
+               , T.reservedOpNames = ["$", "<-", "~", "->"]
+               , T.reservedNames = ["do", "if", "then", "else", "import", "exposing", "qualified", "let", "in", "infixl", "infixr", "True", "False", "Null"]
                }
 
 T.TokenParser { T.identifier = identifier
@@ -61,30 +66,56 @@ T.TokenParser { T.identifier = identifier
 parseFile :: String -> String -> Either ParseError [Statement]
 parseFile str fileName = parse mainParser fileName str
 
-parseEval :: String -> Either ParseError Expr
-parseEval str = parse expr "EVAL" str
+parseEval :: [Op] -> String -> Either ParseError Expr
+parseEval ops = parse (expr ops) "EVAL"
 
+-- TODO: Maybe add ops?
 parseFileExpr :: String -> String -> Either ParseError [Statement]
-parseFileExpr str fileName = fmap (map Run) (parse (many (expr)) fileName str)
+parseFileExpr str fileName = fmap (map Run) (parse (many (expr [])) fileName str)
 
-parseAsRepl :: String -> Either ParseError [Statement]
-parseAsRepl = parse mainParser "REPL"
+parseAsRepl :: [Op] -> String -> Either ParseError ([Statement], [Op])
+parseAsRepl ops = parse (statements ops) "REPL"
 
---TODO: many expr seems weird
+--TODO: Maybe add ops?
 parseAsReplExpr :: String -> Either ParseError [Statement]
-parseAsReplExpr str = (map Run) <$> parse (many expr) "REPL" str
+parseAsReplExpr str = (map Run) <$> parse (many (expr [])) "REPL" str
+
 
 mainParser :: Parser [Statement]
-mainParser = whiteSpace >> (many statement) <* eof
+--TODO: custom many
+mainParser = whiteSpace >> (fst <$> statements []) <* eof
 
-statement :: Parser Statement
-statement = (try importS <|> try defOp <|> try defS <|> try defDestS <|> try defFClassS <|> runS) <* symbol ";" <?> "statement"
+statements :: [Op] -> Parser ([Statement], [Op])
+statements ops = (do
+    x <- statement ops
+    case x of
+        (DefOpPrec op prec assoc) -> (statements ((Op op prec assoc):ops))
+        _ -> (first (x:) <$> statements ops)
+    ) <|> return ([], ops)
+
+statement :: [Op] -> Parser Statement
+statement ops =
+    ((try defOpPrec
+    <|> try importS
+    <|> try (defOp ops)
+    <|> try (defS ops)
+    <|> try (defDestS ops)
+    <|> try (defFClassS ops)
+    <|> (runS ops)) <* symbol ";") <?> "statement"
+
+defOpPrec :: Parser Statement
+defOpPrec = do
+            assoc <- (reserved "infixl" >> return AssocLeft) <|> (reserved "infixr" >> return AssocRight)
+            op <- operator
+            prec <- natural
+            return $ DefOpPrec op prec assoc
+
 
 importS :: Parser Statement
 importS = (do
     reserved "import"
     isQ <- option False (reserved "qualified" >> return True)
-    mname <- identifier
+    mname <- many $ (alphaNum <|> oneOf "/.")
     it <- exposingI <|> return All
     return $ Import mname it isQ) <?> "import"
     where
@@ -92,95 +123,131 @@ importS = (do
             reserved "exposing"
             Exposing <$> commaSep (identifier <|> parens operator)
 
-defS :: Parser Statement
-defS = Def <$> definition
+defS :: [Op] -> Parser Statement
+defS ops = Def <$> (definition ops)
 
-defOp :: Parser Statement
-defOp = do
+defOp :: [Op] -> Parser Statement
+defOp ops = do
     p1 <- identifier
     op <- operator
     p2 <- identifier
     symbol "="
-    e <- expr
+    e <- expr ops
     return $ Def $ NormalDef op $ Literal $ LambdaL p1 $ Literal $ LambdaL p2 e
 
-defDestS :: Parser Statement
-defDestS = do
+defDestS :: [Op] -> Parser Statement
+defDestS ops = do
     symbol "<<"
     name <- identifier
     v <- identifier
     symbol ">>"
-    ds <- sepBy1 expr (symbol "@")
+    ds <- sepBy1 (expr ops) (symbol "@")
     return $ DefDest (Destr name v ds)
 
-defFClassS :: Parser Statement
-defFClassS = do
+defFClassS :: [Op] -> Parser Statement
+defFClassS ops = do
     name <- identifier <|> parens operator
     arity <- fromInteger <$> natural
     prec <- fromInteger <$> natural
     symbol "+="
-    e <- expr
+    e <- expr ops
     return $ DefFClass name arity $ FClassInstance prec e
 
-runS :: Parser Statement
-runS = Run <$> expr
+runS :: [Op] -> Parser Statement
+runS ops = Run <$> (expr ops)
 
-expr :: Parser Expr
-expr = buildExpressionParser exTable term <?> "expression"
+expr :: [Op] -> Parser Expr
+expr ops = buildExpressionParser (makeOpTable ops) (term ops) <?> "expression"
 
-exTable = [ [Infix (spaces >> return (\f x -> FCall f x)) AssocLeft]
-          , [Infix (operator >>= \p -> return (\x y -> FCall (FCall (Var p) x) y)) AssocLeft]
-          , [Infix ((symbol "`" >> identifier <* symbol "`") >>= \p -> return (\x y -> FCall (FCall (Var p) x) y)) AssocLeft]
-          , [Infix (reservedOp "$" >> return FCall) AssocRight]
-          ]
+makeOpTable :: [Op] -> [[Operator String () Identity Expr]]
+makeOpTable ops = [ [Infix (spaces >> return (\f x -> FCall f x)) AssocLeft]
+                  , [Prefix (symbol "-" >> return (\x -> FCall (FCall (Var "-") (Literal (NumL 0))) x))]
+                  ]
+                  ++
+                  opsToTable ops
+                  ++
+                  [ [Infix (operator >>= \p -> return (\x y -> FCall (FCall (Var p) x) y)) AssocLeft]
+                  , [Infix ((symbol "`" >> identifier <* symbol "`") >>= \p -> return (\x y -> FCall (FCall (Var p) x) y)) AssocLeft]
+                  , [Infix (reservedOp "$" >> return FCall) AssocRight]
+                  , [Infix (reservedOp "~" >> return (\x f -> FCall f x)) AssocLeft]
+                  ]
 
-term :: Parser Expr
-term =  try (Var <$> parens operator)
-    <|> parens expr
-    <|> Literal <$> litE
-    <|> letE
-    <|> ifE
+opsToTable :: [Op] -> [[Operator String () Identity Expr]]
+opsToTable ops = (`map` opTable) (map (\(Op op _ assoc) -> Infix (symbol op >>= \p -> return (\x y -> FCall (FCall (Var p) x) y)) assoc))
+    where opTable = L.groupBy (\(Op _ p1 _) (Op _ p2 _) -> p1 == p2) ops
+
+term :: [Op] -> Parser Expr
+term ops =  try (Var <$> parens operator)
+    <|> parens (expr ops)
+    <|> Literal <$> litE ops
+    <|> letE ops
+    <|> ifE ops
+    <|> doE ops
     <|> Var <$> identifier
 
+data DoVar = DoVar String Expr | DoEx Expr
 
-letE :: Parser Expr
-letE = do
+doE :: [Op] -> Parser Expr
+doE ops = do
+    reserved "do"
+    doVs <- braces $ semiSep (try doVar <|> fmap DoEx (expr ops))
+    return (createDo doVs)
+    where
+        doVar = do
+            x <- identifier
+            reservedOp "<-"
+            e <- expr ops
+            return $ DoVar x e
+        createDo :: [DoVar] -> Expr
+        createDo ((DoEx e):[]) = e
+        createDo ((DoVar _ e):[]) = e
+        createDo ((DoEx e):dvs) = (FCall (FCall (Var ">>=") e) (Literal (LambdaL "_" (createDo dvs))))
+        createDo ((DoVar i e):dvs) = (FCall (FCall (Var ">>=") e) (Literal (LambdaL i (createDo dvs))))
+
+
+
+letE :: [Op] -> Parser Expr
+letE ops = (do
     reserved "let"
-    d <- definition
+    d <- definition ops
     reserved "in"
-    e <- expr
-    return $ Let d e
+    e <- (expr ops)
+    return $ Let d e) <?> "let expression"
 
-definition :: Parser Definition
-definition = (try normalDef <|> destDef) <?> "definition"
+definition :: [Op] -> Parser Definition
+definition ops = (try normalDef <|> destDef) <?> "definition"
     where
         normalDef = do
             x <- identifier <|> parens operator
+            ps <- many (identifier <|> parens operator)
             symbol "="
-            e <- expr
-            return $ NormalDef x e
+            e <- (expr ops)
+            return $ NormalDef x (genF ps e)
         destDef = do
             (dest, ps) <- parens $ do
                 dest <- identifier
                 ps <- many identifier
                 return (dest, ps)
             symbol "="
-            e <- expr
+            e <- (expr ops)
             return $ DestDef dest ps e
+        genF :: [String] -> Expr -> Expr
+        genF []     e = e
+        genF (p:ps) e = Literal $ LambdaL p $ genF ps e
 
 
-ifE :: Parser Expr
-ifE = do
+ifE :: [Op] -> Parser Expr
+ifE ops = do
     reserved "if"
-    c <- expr
+    c <- (expr ops)
     reserved "then"
-    th <- expr
+    th <- (expr ops)
     reserved "else"
-    el <- expr
+    el <- (expr ops)
     return $ If c th el
 
-litE :: Parser Lit
-litE = (numL <|> charL <|> listL <|> stringL <|> boolL <|> nullL  <|> lambdaL  <|> recordL) <?> "literal"
+litE :: [Op] -> Parser Lit
+litE ops = (numL <|> charL <|> (listL ops) <|> stringL <|> boolL <|> nullL  <|> lambdaL ops  <|> (recordL ops)) <?> "literal"
 
 boolL :: Parser Lit
 boolL = (reserved "True"  >> return (BoolL True))
@@ -195,24 +262,27 @@ nullL = reserved "Null" >> return NullL
 charL :: Parser Lit
 charL = CharL <$> charLiteral
 
-listL :: Parser Lit
-listL = ListL <$> brackets (commaSep expr)
+listL :: [Op] -> Parser Lit
+listL ops = ListL <$> brackets (commaSep (expr ops))
 
 stringL :: Parser Lit
 stringL = ListL <$> (fmap (Literal . CharL) <$> stringLiteral)
 
-recordL :: Parser Lit
-recordL = fmap RecordL $ braces $ commaSep $ do 
+recordL :: [Op] -> Parser Lit
+recordL ops = fmap RecordL $ braces $ commaSep $ do
     k <- identifier <|> between (char '\"') (char '\"') (many alphaNum)
     symbol ":"
-    v <- expr
+    v <- (expr ops)
     return (k, v)
 
-lambdaL :: Parser Lit
-lambdaL = do
+lambdaL :: [Op] -> Parser Lit
+lambdaL ops = do
     symbol "\\"
-    x <- identifier
-    symbol "->"
-    e <- expr
-    return $ LambdaL x e
-
+    ps <- many1 identifier
+    reservedOp "->"
+    e <- expr ops
+    return $ genL ps e
+    where
+        genL :: [String] -> Expr -> Lit
+        genL [p]    e = LambdaL p e
+        genL (p:ps) e = LambdaL p (Literal $ genL ps e)

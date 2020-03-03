@@ -1,94 +1,93 @@
 -- General
-id = \x -> x;
-const = \x -> \y -> x;
-print = \x -> put (show x);
-printP = \x -> put (showP x);
-printOrExec = \x -> if ((typeof x) == "IO")
+id x = x;
+const x y = x;
+print = put ° show;
+printP = put ° showP;
+printOrExec x = if ((typeof x) == "IO")
     then x
     else print x;
 -- printOrExec = \x -> if (ord (typeof x) "IO") then print x else x;
-putRaw = \x -> put (debugRaw x);
-not = \x -> if x then False else True;
-eq = \x -> \y -> not (ord x y);
-comp = \f -> \g -> \x -> f (g x);
+putRaw = put ° debugRaw;
+not x = if x then False else True;
+eq x y = not (ord x y);
+comp f g x = f (g x);
 (°) = comp;
 (∘) = (°);
 toBool = not ∘ not;
-flip = \f -> \x -> \y -> f y x;
+flip f x y = f y x;
 x |> f = f x;
 (==) = eq;
 x /= y = not (x == y);
 (!=) = (/=);
 
-is = \x -> \t -> ((typeof x) == t) || (if ((typeof x) == "Record") then ((get "Type" x) == t) else False);
+is x t = ((typeof x) == t) || (if ((typeof x) == "Record") then ((get "Type" x) == t) else False);
 
 isT = flip is;
 
-all = \f -> \l -> if (l `is` "List") then
+all f l = if (f `is` "Function") && (l `is` "List") then
     if l
-    then let (HT x xs) = l in
+    then let x = head l in let xs = tail l in
             if f x
             then all f xs
             else False
     else True
-
 else False;
 
-isString = \l -> (all (isT "Char") l);
+isString = all (isT "Char");
 
 -- Boolean
-and = \x -> \y -> if x then y else x;
-or  = \x -> \y -> if x then x else y;
-(&&)  = and;
-(||)  = or;
-lt  = \x -> \y -> eq -1 (ord x y);
-(<)   = lt;
-gt  = \x -> \y -> eq 1 (ord x y);
-(>)   = gt;
-x <= y = not (x > y);
-x >= y = not (x < y);
+and x y = if x then y else x;
+or  x y = if x then x else y;
+(&&)    = and;
+(||)    = or;
+lt  x y = eq -1 (ord x y);
+(<)     = lt;
+gt  x y = eq 1 (ord x y);
+(>)     = gt;
+x <= y   = not (x > y);
+x >= y   = not (x < y);
 
 
 -- Math
 pi = 3.1415927;
 e  = 2.7182818;
 
-factorial = \n -> if n
-                  then (n * (factorial (n - 1)))
+factorial n = if n
+                  then n * factorial (n - 1)
                   else 1;
 
-powN = \x -> \n -> if n
-    then (x * (powN x (n - 1)))
+powN x n = if n
+    then x * powN x (n - 1)
     else 1;
 
-sqrt = \x -> root 2 x;
+sqrt x = root 2 x;
 
-root = \r -> \x -> rootInner r x (round (x / 2));
+root r x = rootInner r x (round (x / 2));
 
-rootInner = \r -> \x -> \guess -> if (((abs ((powN guess r) - x)) < (0.1 * x)) || guess < 0.01)
+rootInner r x guess = if (((abs ((powN guess r) - x)) < (0.1 * x)) || guess < 0.01)
     then guess
     else rootInner r x ((((r - 1) * guess) + (x/(powN guess (r - 1)))) / 2);
 
-max = \x -> \y -> if x > y then x else y;
+max x y = if x > y then x else y;
 min = flip max;
 
 (^) = powN;
 divBy = flip (/);
 subBy = flip (-);
 
-abs = \x -> if (x < 0) then (0 - x) else x;
+abs x = if (x < 0) then (0 - x) else x;
 
 
-gcd = \x -> \y -> gcd_ (abs x) (abs y);
+gcd x y = gcd_ (abs x) (abs y);
 
-gcd_ = \x -> \y -> if y
+gcd_ x y = if y
     then gcd_ y (x `rem` y)
     else x;
 
 
 -- Lists
 --foldl 2 20 += \x -> \y -> \z -> "Test?";
-foldlList = \f -> \z -> tclass "List"
+foldlList = tclass "Function" \f z -> tclass "List"
                               \l -> if l then let (HT x xs) = l in
                               (foldlList f (f z x) xs)
                               else z;
@@ -96,9 +95,9 @@ foldlList = \f -> \z -> tclass "List"
 foldl = foldlList;
 
 
-mapI = \f -> \l -> mapIS f l 0;
+mapI f l = mapIS f l 0;
 
-mapIS = \f -> \l -> \i ->
+mapIS f l i =
         if l
         then let (HT x xs) = l in
             cons (f x i) (mapIS f xs (i + 1))
@@ -108,22 +107,22 @@ mapIS = \f -> \l -> \i ->
 (<$>) = map;
 (:) = cons;
 
-range = \s -> \e -> if (s >= e)
+range s e = if (s >= e)
                     then []
                     else cons s (range (s + 1) e);
 
-rangeStep = \s -> \e -> \step -> if (s >= e)
+rangeStep s e step = if (s >= e)
                                  then []
                                  else cons s (rangeStep (s + step) e step);
 
 (::) = range;
 
-rangeI = \s -> \e -> range s (e + 1);
+rangeI s e = range s (e + 1);
 
 (::+) = rangeI;
 
 
-repeat = \x -> \i -> if (i <= 0)
+repeat x i = if (i <= 0)
     then []
     else (x : (repeat x (i - 1)));
 
@@ -135,31 +134,35 @@ repeat = \x -> \i -> if (i <= 0)
 
 <<T l>> head l @ getAt 1 l @ getAt 2 l @ getAt 3 l @ getAt 4 l @ getAt 5 l @ getAt 6 l @ getAt 7 l;
 
-padStart = \x -> \i -> \l -> ((repeat x (i - (length l))) + l);
+padStart x i l = ((repeat x (i - (length l))) + l);
 
-take = \i -> \l -> if ((toBool l) && (i > 0))
+take i l = if ((toBool l) && (i > 0))
     then let (HT x xs) = l in (x : (take (i - 1) xs))
     else [];
 
-skipLast = \i -> \l -> take ((length l) - i) l;
+skipLast i l = take ((length l) - i) l;
 
-any = \f -> foldl (\acc -> \cur -> acc || (f cur)) False;
+any f = foldl (\acc cur -> acc || (f cur)) False;
 
 
 -- IO
 (>>=) 1 20 += tclass ["IO", "Function"] compIO;
+(>>=) 1 20 += tclass ["List", "Function"] (flip flatMap);
 
 x >> y = x >>= (const y);
 
-compIOForever = \a -> \f -> a >>= (\x -> (f x) >>= (\y -> compIOForever a f));
+compIOForever a f = a >>= (\x -> (f x) >>= (\y -> compIOForever a f));
 
-doAll = \l -> if l
+doAll l = if l
     then let (HT x xs) = l in (x >> (doAll xs))
     else pureIO Null;
 
-printAll = \l -> doAll (map print l);
+mapM_ f l = doAll (map f l);
 
-putAll = \l -> doAll (map put l);
+printAll = mapM_ print;
+
+putAll = mapM_ put;
+
 
 -- JSON compatibility
 null = Null;
@@ -189,6 +192,14 @@ tclass = \tl -> \f -> if (tl && (isString tl))
                 else throw "FClass" ("Not Type " + t)
         else f;
 
+fclass = \pl -> \f -> if (pl `is` "Function")
+    then fclass [pl] f
+    else if pl
+        then let (HT p ps) = pl in
+            \y -> if (p y)
+                then fclass ps (f y)
+                else throw "FClass" ("Does not match the predicate" + t)
+        else f;
 
 
 show 0 30 += \x -> if ((x `is` "List") && x && (isString x))
@@ -314,3 +325,9 @@ flatMap 1 20 += tclass ["Function", "List"] \f -> \l ->
 
 x !! ys = getAt x ys;
 
+getLine = (fclass isString \s -> do {  {-Fails!-}
+    put s;
+    readLine
+});
+
+import stdlib/system/IO;

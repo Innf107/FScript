@@ -2,7 +2,7 @@ module Cmdline where
 
 import System.Console.ANSI
 
-version = "2.1"
+version = "2.2"
 
 showHelp :: IO ()
 showHelp = do

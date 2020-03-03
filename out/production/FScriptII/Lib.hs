@@ -15,6 +15,10 @@ mapLeft f (Left x)  = (Left (f x))
 mapLeft _ (Right x) = (Right x)
 
 
+fromLeftF :: (a -> b) -> Either a b -> b
+fromLeftF _ (Right x) = x
+fromLeftF f (Left x)  = f x 
+
 parseMaybe :: Parser a -> Parser (Maybe a)
 parseMaybe p = Just <$> try p <|> return Nothing
 

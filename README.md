@@ -19,17 +19,16 @@ dynamic programming language.
 It is my first proper language so there may be some bugs particularly with the parser.
 
 FScript was written in [Haskell](https://haskell.org) using [Parsec](https://hackage.haskell.org/package/parsec) as a parsing library.
-Because this is my first language, it does not actually compile to machine code, but is executed by the haskell runtime. 
-Because of that, do not expect FScript to be very fast.
+Because this is my first language, it does not actually compile to machine code, but is executed by the haskell runtime.
 
-FScript's syntax is very similar to [Haskell](https://haskell.org) and [JSON](https://www.json.org/) is natively supported as a subset of FScript.
+FScript's syntax is very similar to [Haskell](https://haskell.org) although [JSON](https://www.json.org/) is natively supported as a subset of FScript.
 
 # <a name="1.1">1.1 The commandline interface 
 If you know haskell, you are probably familiar with [GHCi](https://downloads.haskell.org/~ghc/latest/docs/html/users_guide/ghci.html) already.
 If you are not, don't worry! GHCi is just a REPL (**R**ead **E**valuate **P**rint **L**oop) for Haskell.
 This is the same as Python's interactive interpreter: a **command prompt**, in which you can **evaluate** FScript statements or expressions, have the result **printed** out to the console and **repeat**.
 
-This will be quite useful for the following documentation, because you may want to follow along:
+FScript's REPL will be quite useful for the following documentation, so you may want to follow along:
 ```bash
 fscript --repl
 ```

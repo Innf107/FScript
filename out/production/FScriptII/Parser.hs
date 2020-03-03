@@ -1,456 +1,231 @@
-{-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE DeriveAnyClass #-}
 module Parser where
 
-import Text.Parsec (ParseError)
-import Text.Parsec.String (Parser)
-import Text.Parsec.String.Parsec
-import Text.Parsec.String.Char
-import Text.Parsec.String.Combinator
-import Control.Applicative ((<|>), many)
-import Control.Monad (void)
-import Data.Char (isLetter, isDigit)
-import Data.Maybe
-import Data.Either
---import Debug.Trace
+import Types
 import Lib
-import Text.Parsec.Prim ((<?>))
-import Control.DeepSeq
-import qualified Data.Map as M
+import Control.Applicative((<*))
+import Text.Parsec
+import Text.Parsec.Expr
+import qualified Text.Parsec.Token as T
+import Text.Parsec.Language
+import Data.Either
+import Control.Monad.Identity (Identity)
 
-data Statement = NOP
-               | Import String ImportType Bool
-               | Def Definition
-               | DefDest Destr
--- TODO DefFCArity String Int
-               | DefFClass String Int FClassInstance
-               | Run Expr
-               deriving (Show, Eq, Read)
+type Parser = Parsec String ()
 
-data Definition = NormalDef String Expr
-                | DestDef String [String] Expr
-                deriving (Show, Eq, Read)
+def :: LanguageDef ()
+def = emptyDef { T.commentStart = "{-"
+               , T.commentEnd = "-}"
+               , T.commentLine = "--"
+               , T.identStart = letter <|> oneOf "_"
+               , T.identLetter = alphaNum <|> oneOf "_"
+               , T.opStart = oneOf "+-*/~%&§$!#<>|^°∘?:="
+               , T.opLetter = oneOf "+-*/~%&§$!#<>|^°∘?:="
+               , T.reservedOpNames = ["$"]
+               , T.reservedNames = ["if", "then", "else", "import", "exposing", "qualified", "let", "in", "True", "False", "Null"]
+               }
 
-data FClassInstance = FClassInstance Int Expr deriving (Show, Eq, Read)
+T.TokenParser { T.identifier = identifier
+              , T.reserved = reserved
+              , T.operator = operator
+              , T.reservedOp = reservedOp
 
--- TODO: As
-data ImportType = All
-                | Exposing [String]
-    deriving (Show, Eq, Read)
+              , T.charLiteral = charLiteral
+              , T.stringLiteral = stringLiteral
+              , T.natural = natural
+              , T.integer = integer
+              , T.float = float
+              , T.naturalOrFloat = naturalOrFloat
+              , T.decimal = decimal
+              , T.hexadecimal = hexadecimal
+              , T.octal = octal
 
-data Expr = Literal Lit
-          | Let Definition Expr
-          | If Expr Expr Expr
-          | Var String
-          | FCall Expr Expr
-          | Value RTValue
-          deriving (Show, Eq, Read)
+              , T.symbol = symbol
+              , T.lexeme = lexeme
+              , T.whiteSpace = whiteSpace
 
-data Lit = NumL Float
-         | CharL Char
-         | ListL [Expr]
-         | BoolL Bool
-         | NullL
-         | LambdaL String Expr
-         | RecordL [(String, Expr)]
-         deriving (Show, Eq, Read)
+              , T.parens = parens
+              , T.braces = braces
+              , T.angles = angles
+              , T.brackets = brackets
+              , T.squares = squares
+              , T.semi = semi
+              , T.comma = comma
+              , T.colon = colon
+              , T.dot = dot
+              , T.semiSep = semiSep
+              , T.semiSep1 = semiSep1
+              , T.commaSep = commaSep
+              , T.commaSep1 = commaSep1
+              } = T.makeTokenParser def
 
-data RTValue = NumV Float
-             | CharV Char
-             | ListV [RTValue]
-             | BoolV Bool
-             | IOV IOAction
-             | FuncV String Expr (M.Map String RTValue)
-             | NativeF (RTValue -> RTState -> RTValue) (M.Map String RTValue)
-             | FClass Int [FClassInstance] [RTValue]
-             | NullV
-             | RecordV [(String, RTValue)]
-             | ExceptionV String String
-             deriving (Show, Eq, Read)
-
-
-data RTState = RTState {getVals::M.Map String RTValue, getArgs::M.Map String RTValue,
-                        getClosures::M.Map String RTValue, getDests::[Destr], getFClasses::M.Map String FClassObj}
-                        deriving (Show, Eq, Read)
-
-data FClassObj = FClassObj Int [FClassInstance] [RTValue] deriving (Show, Eq, Read)
-
-data Destr = Destr String String [Expr] deriving (Show, Eq, Read)
-
-data IOAction = PureIO RTValue
-              | Print String
-              | ReadLine 
-              | ReadFile String
-              | Composed IOAction RTValue
-              deriving (Show, Eq, Read)
-
-
-instance Show (RTValue -> RTState -> RTValue) where
-    show _ = "(RTValue -> RTState -> RTValue)"
-instance Eq (RTValue -> RTState -> RTValue) where
-    _ == _ = False
-
-instance Read (RTValue -> RTState -> RTValue) where
-    readsPrec _ _ = []
 
 parseFile :: String -> String -> Either ParseError [Statement]
-parseFile str fileName = (parse (many (statement)) fileName str)
+parseFile str fileName = parse mainParser fileName str
 
+parseEval :: [Op] -> String -> Either ParseError Expr
+parseEval ops = parse (expr ops) "EVAL"
+
+-- TODO: Maybe add ops?
 parseFileExpr :: String -> String -> Either ParseError [Statement]
-parseFileExpr str fileName = fmap (map Run) (parse (many (expr)) fileName str)
+parseFileExpr str fileName = fmap (map Run) (parse (many (expr [])) fileName str)
 
-parseEval :: String -> Either ParseError Expr
-parseEval str = parse expr "EVAL" str
+parseAsRepl :: [Op] -> String -> Either ParseError [Statement]
+parseAsRepl ops = parse (statements ops) "REPL"
 
-parseAsRepl :: String -> Either ParseError [Statement]
-parseAsRepl = parse (many (statement)) "REPL"
-
+--TODO: Maybe add ops?
 parseAsReplExpr :: String -> Either ParseError [Statement]
-parseAsReplExpr = fmap (fmap Run) . parse (many (expr)) "REPL"
-
--- Identifier
-reservedIDs :: [String]
-reservedIDs = ["if", "then", "else", "import", "exposing", "qualified", "let", "in", ";", ",", "->"]
-
-idChar :: Parser Char 
-idChar = alphaNum <|> oneOf "._'¹²³⁴⁵⁶⁷⁸⁹⁰"
-
-identifier :: Parser String
-identifier = noPof (do keyword <$> reservedIDs) (do {x <- letter; xs <- many idChar; return (x:xs)}) <?> "identifier"
-
-keyword :: String -> Parser String
-keyword s = (do
-    x <- string s
-    notFollowedBy idChar
-    return x) <?> "keyword" 
-    
-moduleIdentifier :: Parser String
-moduleIdentifier = many (idChar <|> oneOf "/~.") <?> "module identifier"
-
-operator :: Parser String
-operator = (many1 $ oneOf "+-_*/~%&$§!#<>|^°∘?:=") <?> "operator"
-
--- Statement
-statement :: Parser Statement
-statement = do
-    spaces 
-    s <- try commentS <|> statement'
-    spaces
-    return s -- <|> return NOP
-
-statement' :: Parser Statement
-statement' = do
-    spaces
-    s <- try importS <|> try defS <|> try defDestS <|> try defFClassS <|> try runS
-    spaces
-    char ';'
-    return s
-
-defDestS :: Parser Statement
-defDestS = do
-            string "<<"
-            spaces
-            name <- identifier
-            spaces
-            v <- identifier
-            spaces
-            string ">>"
-            spaces
-            ds <- sepBy expr (char '@')
-            return $ DefDest $ Destr name v ds
+parseAsReplExpr str = (map Run) <$> parse (many (expr [])) "REPL" str
 
 
-defFClassS :: Parser Statement
-defFClassS = do
-            name <- identifier <|> operator
-            spaces
-            arity <- read <$> (many1 digit)
-            spaces
-            prec <- read <$> (many1 digit)
-            spaces
-            string "+="
-            spaces
-            e <- expr
-            return $ DefFClass name arity $ FClassInstance prec e
+mainParser :: Parser [Statement]
+--TODO: custom many
+mainParser = whiteSpace >> (statements []) <* eof
 
-commentS :: Parser Statement
-commentS = (spaces >> string "--" >> many (noneOf "\n") >> return NOP) <?> "comment"
+statements :: [Op] -> Parser [Statement]
+statements ops = (do
+    x <- statement ops
+    xs <- statements ops
+    return (x:xs)
+    ) <|> return []
+
+statement :: [Op] -> Parser Statement
+statement ops = (try importS <|> try (defOp ops) <|> try (defS ops) <|> try (defDestS ops) <|> try (defFClassS ops) <|> (runS ops)) <* symbol ";" <?> "statement"
 
 importS :: Parser Statement
-importS = do
-    string "import"
-    spaces
-    isQ <- option False (const True <$> string "qualified")
-    spaces
-    mname <- moduleIdentifier
-    spaces
-    it <- importTypeS
-    return $ Import mname it isQ
+importS = (do
+    reserved "import"
+    isQ <- option False (reserved "qualified" >> return True)
+    mname <- identifier
+    it <- exposingI <|> return All
+    return $ Import mname it isQ) <?> "import"
+    where
+        exposingI = do
+            reserved "exposing"
+            Exposing <$> commaSep (identifier <|> parens operator)
 
-importTypeS :: Parser ImportType
-importTypeS = try exposingI <|> return All
+defS :: [Op] -> Parser Statement
+defS ops = Def <$> (definition ops)
 
-exposingI :: Parser ImportType
-exposingI = do
-    string "exposing"
-    spaces
-    ids <- sepBy (identifier <|> operator) (char ',' >> spaces)
-    return $ Exposing ids
+defOp :: [Op] -> Parser Statement
+defOp ops = do
+    p1 <- identifier
+    op <- operator
+    p2 <- identifier
+    symbol "="
+    e <- expr ops
+    return $ Def $ NormalDef op $ Literal $ LambdaL p1 $ Literal $ LambdaL p2 e
 
-defS :: Parser Statement
-defS = do
-    spaces
-    normalDef <|> destDef
+defDestS :: [Op] -> Parser Statement
+defDestS ops = do
+    symbol "<<"
+    name <- identifier
+    v <- identifier
+    symbol ">>"
+    ds <- sepBy1 (expr ops) (symbol "@")
+    return $ DefDest (Destr name v ds)
+
+defFClassS :: [Op] -> Parser Statement
+defFClassS ops = do
+    name <- identifier <|> parens operator
+    arity <- fromInteger <$> natural
+    prec <- fromInteger <$> natural
+    symbol "+="
+    e <- expr ops
+    return $ DefFClass name arity $ FClassInstance prec e
+
+runS :: [Op] -> Parser Statement
+runS ops = Run <$> (expr ops)
+
+expr :: [Op] -> Parser Expr
+expr ops = buildExpressionParser (makeOpTable ops) (term ops) <?> "expression"
+
+data Op = Op Int Assoc
+
+makeOpTable :: [Op] -> [[Operator String () Identity Expr]]
+makeOpTable ops = [ [Infix (spaces >> return (\f x -> FCall f x)) AssocLeft]
+                  , [Infix (operator >>= \p -> return (\x y -> FCall (FCall (Var p) x) y)) AssocLeft]
+                  , [Infix ((symbol "`" >> identifier <* symbol "`") >>= \p -> return (\x y -> FCall (FCall (Var p) x) y)) AssocLeft]
+                  , [Infix (reservedOp "$" >> return FCall) AssocRight]
+                  ]
+
+term :: [Op] -> Parser Expr
+term ops =  try (Var <$> parens operator)
+    <|> parens (expr ops)
+    <|> Literal <$> litE ops
+    <|> letE ops
+    <|> ifE ops
+    <|> Var <$> identifier
+
+
+letE :: [Op] -> Parser Expr
+letE ops = do
+    reserved "let"
+    d <- definition ops
+    reserved "in"
+    e <- (expr ops)
+    return $ Let d e
+
+definition :: [Op] -> Parser Definition
+definition ops = (try normalDef <|> destDef) <?> "definition"
     where
         normalDef = do
-            name <- identifier <|> operator
-            spaces
-            char '='
-            spaces
-            e <- expr
-            return $ Def $ NormalDef name e
+            x <- identifier <|> parens operator
+            symbol "="
+            e <- (expr ops)
+            return $ NormalDef x e
         destDef = do
-            char '('
-            dest <- identifier
-            spaces
-            pars <- sepBy1 identifier spaces
-            char ')'
-            spaces
-            char '='
-            spaces
-            e <- expr
-            return $ Def $ DestDef dest pars e
-
-runS :: Parser Statement
-runS = do
-    v <- expr
-    return $ Run v
+            (dest, ps) <- parens $ do
+                dest <- identifier
+                ps <- many identifier
+                return (dest, ps)
+            symbol "="
+            e <- (expr ops)
+            return $ DestDef dest ps e
 
 
--- Expression
-expr :: Parser Expr
-expr = do
-    spaces
-    ex <- expr'
-    args <- catMaybes <$> manyBounded (parseMaybe expr') 100
-    return $ genFCall ex (reverse args)
-    where
-        genFCall :: Expr -> [Expr] -> Expr
-        genFCall ex [] = ex
-        genFCall ex (a:as) = FCall (genFCall ex as) a
-
-expr' :: Parser Expr
-expr' = do
-    spaces
-    ex <- try (expr'' `chainl1` infixE) <|> expr''
-    spaces
-    return ex
-
-expr'' :: Parser Expr
-expr'' = do
-    ex <- try (parensE <|> litE <|> letE <|> ifE) <|> varE -- <|> fcallE {- try (chainl1 (try expr') (try infixE)) <|> -}
-    return ex
-
--- {f x y z}
--- FCall {f x y} (Var z)
--- FCall (FCall {f x} (Var y)) (Var z)
--- FCall (FCall (FCall {f} (Var x)) (Var y)) (Var z)
--- FCall (FCall (FCall (Var f) (Var x)) (Var y)) (Var z)
-
-manyBounded :: Parser a -> Int -> Parser [a]
-manyBounded _ 0 = return []
-manyBounded p n = do
-    r <- p
-    rest <- manyBounded p (n - 1)
-    return (r:rest)
-
-
-parensE :: Parser Expr
-parensE = between (char '(') (char ')') expr
-
-letE :: Parser Expr
-letE = do
-    spaces
-    string "let"
-    spaces
-    normalLet <|> destLet
-    where
-        normalLet = do
-            name <- identifier
-            spaces
-            char '='
-            spaces
-            vex <- expr
-            spaces
-            try $ string "in"
-            spaces
-            e <- expr
-            spaces
-            return $ Let (NormalDef name vex) e
-        destLet = do
-            char '('
-            dest <- identifier
-            spaces
-            pars <- sepBy1 identifier spaces
-            char ')'
-            spaces
-            char '='
-            spaces
-            vex <- expr
-            spaces
-            try $ string "in"
-            spaces
-            e <- expr
-            spaces
-            return $ Let (DestDef dest pars vex) e
-
-
-ifE :: Parser Expr
-ifE = do
-    spaces
-    string "if"
-    spaces
-    c <- expr
-    spaces
-    string "then"
-    spaces
-    -- TODO: BUG: Needs Parens for infix?!?
-    th <- expr
-    spaces
-    string "else"
-    spaces
-    el <- expr
-    spaces
+ifE :: [Op] -> Parser Expr
+ifE ops = do
+    reserved "if"
+    c <- (expr ops)
+    reserved "then"
+    th <- (expr ops)
+    reserved "else"
+    el <- (expr ops)
     return $ If c th el
 
-varE :: Parser Expr
-varE = do
-    name <- identifier <|> operator
-    return $ Var name
-
-
-infixE :: Parser (Expr -> Expr -> Expr)
-infixE = do
-    spaces
-    op <- (operator <|> backtick)
-    spaces
-    return $ (\e1 e2 -> FCall (FCall (Var op) e1) e2)
-    where
-        backtick = do
-            char '`'
-            op <- identifier
-            char '`'
-            return op
-
--- Obsolete
-fcallE :: Parser Expr
-fcallE = do
-    f <- expr'
-    spaces
-    a <- expr
-    return $ FCall f a
-
--- f x y z
--- ((f x) y) z
-
--- x + y + z
--- (x + y) + z
--- + (+ x y) z
--- (+ ((+ x) y) z
-
-(<++>) a b = (++) <$> a <*> b
-(<:>)  a b = (:)  <$> a <*> b
-
--- Literals
-litE :: Parser Expr
-litE = Literal <$> (try spaces >> (numL <|> boolL <|> nullL <|> charL <|> listL <|> stringL <|> lambdaL <|> recordL))
-
-numL :: Parser Lit
-numL = (NumL . read) <$> (int <++> decimal <++> exponent)
-    where decimal = option "" $ char '.' <:> number
-          exponent = option "" $ oneOf "Ee" <:> number
-          int    = (plus <|> minus <|> number)
-          plus   = char '+' >> number
-          minus  = char '-' <:> number
-          number = many1 digit
-
+litE :: [Op] -> Parser Lit
+litE ops = (numL <|> charL <|> (listL ops) <|> stringL <|> boolL <|> nullL  <|> lambdaL ops  <|> (recordL ops)) <?> "literal"
 
 boolL :: Parser Lit
-boolL = do
-        x <- string "True" <|> string "False"
-        spaces
-        return $ case x of
-            "True" -> BoolL True
-            "False"-> BoolL False
+boolL = (reserved "True"  >> return (BoolL True))
+    <|> (reserved "False" >> return (BoolL False))
+
+numL :: Parser Lit
+numL = (NumL . (fromLeftF fromInteger)) <$> naturalOrFloat
 
 nullL :: Parser Lit
-nullL = do
-        string "Null"
-        spaces
-        return NullL
-
+nullL = reserved "Null" >> return NullL
 
 charL :: Parser Lit
-charL = do
-         char '\''
-         x <- escapeC <|> noneOf "'"
-         char '\''
-         return $ CharL x
-         
-escapeC :: Parser Char
-escapeC = do
-    char '\\'
-    x <- satisfy (const True)
-    case lookup x escapes of
-        Nothing -> fail $ "Invalid escape code \\" ++ [x]
-        Just e -> return e
-         
-escapes :: [(Char, Char)]
-escapes = [('n', '\n'), ('\\', '\\'), ('\'', '\''), ('"', '"'), ('p', 'π')]
-         
-listL :: Parser Lit
-listL = do
-        char '['
-        exps <- catMaybes <$> sepBy ((Just <$> expr) <|> return Nothing) (char ',' >> spaces)
-        char ']'
-        return $ ListL exps
+charL = CharL <$> charLiteral
+
+listL :: [Op] -> Parser Lit
+listL ops = ListL <$> brackets (commaSep (expr ops))
 
 stringL :: Parser Lit
-stringL = do
-            char '"'
-            chars <- many $ (escapeC <|> noneOf ['"'])
-            char '"'
-            return $ ListL (Literal . CharL <$> chars)
+stringL = ListL <$> (fmap (Literal . CharL) <$> stringLiteral)
 
+recordL :: [Op] -> Parser Lit
+recordL ops = fmap RecordL $ braces $ commaSep $ do
+    k <- identifier <|> between (char '\"') (char '\"') (many alphaNum)
+    symbol ":"
+    v <- (expr ops)
+    return (k, v)
 
-lambdaL :: Parser Lit
-lambdaL = do
-    char '\\'
-    spaces
-    param <- identifier
-    spaces
-    string "->"
-    spaces
-    e <- expr
-    return $ LambdaL param e
-
-recordL :: Parser Lit
-recordL = do
-    char '{'
-    spaces
-    elems <- (flip sepBy) (char ',')  (do 
-            spaces
-            name <- identifier <|> do
-                char '"'
-                x <- identifier
-                char '"'
-                return x
-            spaces
-            char ':'
-            spaces
-            val <- expr
-            spaces
-            return (name, val))
-    spaces
-    char '}'
-    return $ RecordL elems
+lambdaL :: [Op] -> Parser Lit
+lambdaL ops = do
+    symbol "\\"
+    x <- identifier
+    symbol "->"
+    e <- expr ops
+    return $ LambdaL x e

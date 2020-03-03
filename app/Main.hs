@@ -1,6 +1,6 @@
 {-# LANGUAGE BlockArguments #-}
 module Main where
-
+--Test?
 import Lib
 import Parser
 import Types
@@ -24,17 +24,18 @@ import Cmdline
 import NativeFs
 import System.Console.ANSI
 import Control.Parallel.Strategies
+import Data.Bifunctor
 import qualified Data.Map as M
 
-updateVals :: (M.Map String RTValue -> M.Map String RTValue) -> RTState -> RTState
+updateVals :: (M.Map String Variable -> M.Map String Variable) -> RTState -> RTState
 updateVals f state = RTState {getVals=f(getVals state), getArgs=getArgs state, getClosures = (getClosures state),
                               getDests=getDests state, getFClasses=getFClasses state, getStackTrace=getStackTrace state}
 
-updateArgs :: (M.Map String RTValue -> M.Map String RTValue) -> RTState -> RTState
+updateArgs :: (M.Map String Variable -> M.Map String Variable) -> RTState -> RTState
 updateArgs f state = RTState {getVals=getVals state, getArgs=f (getArgs state), getClosures = (getClosures state),
                               getDests=getDests state, getFClasses=getFClasses state, getStackTrace=getStackTrace state}
 
-updateClosures :: (M.Map String RTValue -> M.Map String RTValue) -> RTState -> RTState
+updateClosures :: (M.Map String Variable -> M.Map String Variable) -> RTState -> RTState
 updateClosures f state = RTState {getVals=getVals state, getArgs= (getArgs state), getClosures =f (getClosures state),
                                   getDests=getDests state, getFClasses=getFClasses state, getStackTrace=getStackTrace state}
 
@@ -56,17 +57,17 @@ insertFClass name arity fc state = RTState {getVals=getVals state, getArgs=getAr
         ins' (x:_) ys = L.insertBy (\(FClassInstance i _) (FClassInstance j _) -> j `compare` i) x ys
 
 emptyState :: RTState
-emptyState = RTState {getVals=M.fromList (nativeFs ++ nativeVals), getArgs=M.empty, getClosures=M.empty,
+emptyState = RTState {getVals=Eager <$> M.fromList (nativeFs ++ nativeVals), getArgs=M.empty, getClosures=M.empty,
                       getDests=[], getFClasses=M.empty, getStackTrace=[]}
 
 
 nativeFs :: [(String, RTValue)]
-nativeFs = (\(x, y) -> (x, NativeF y M.empty)) <$> [("put", putF), ("debugRaw", debugRawF), ("head", headF),
+nativeFs = (\(x, y) -> (x, NativeF (y evalVar) M.empty)) <$> [("put", putF), ("debugRaw", debugRawF), ("head", headF),
     ("tail", tailF), ("exec", execF), ("typeof", typeofF), ("eval", evalF), ("pureIO", pureIOF), 
     ("round", roundF), ("showNum", showNumF), ("entries", entriesF), ("debugState", debugStateF), ("toCode", toCodeF)]
 
 nativeVals :: [(String, RTValue)]
-nativeVals = [("addNum", addNumF), ("subNum", subNumF), ("ord", ordF), ("mulNum", mulNumF), ("divNum", divNumF), ("cons", consF),
+nativeVals = (second (\f -> f evalVar)) <$> [("addNum", addNumF), ("subNum", subNumF), ("ord", ordF), ("mulNum", mulNumF), ("divNum", divNumF), ("cons", consF),
               ("get", getF), ("set", setF), ("compIO", compIOF), ("readLine", readLineF), ("throw", throwF),
               ("rem", remF)]
 
@@ -115,11 +116,11 @@ runAsRepl debugParse noPrint exprOnly state fspath = do
         _ -> do
             let line = input ++ ";"
             let statements = case exprOnly of
-                    False -> parseAsRepl line
-                    True  -> parseAsReplExpr line
+                    False -> parseAsRepl [] line
+                    True  -> (\x -> (x, [])) <$> (parseAsReplExpr line)
             state' <- case statements of
                         Left e -> print e >> return state
-                        Right sts -> do
+                        Right (sts, ops) -> do
                             let replSTS = if noPrint then sts else map statementAsRepl sts
                             when debugParse $ print replSTS
                             (state', isE) <- runStatements replSTS state fspath
@@ -141,11 +142,11 @@ runStatements (s:sts) state fspath = do
 runStatement :: Statement -> RTState -> String -> IO (RTState, Bool)
 runStatement NOP                    state _ = return (state, False)
 runStatement (Import m iType q)     state fspath = (\x -> (x, False)) <$> runImport m iType q state fspath
-runStatement (Def (NormalDef n e))  state _ = return $ (updateVals (M.insert n (eval e state)) state, False)
+runStatement (Def (NormalDef n e))  state _ = return $ (updateVals (M.insert n (Lazy e)) state, False)
 runStatement (Def (DestDef dn ns e))state _ = case find (\(Destr dn' _ _) -> dn == dn') (getDests state) of
     Nothing -> putStrLn ("Destructuring " ++ dn ++ "does not exist!") >> return (state, True)
     Just (Destr _ v exps) ->
-        return $ (updateVals (insertAll ((\(n, ne) -> (n, evalDest v e ne state)) <$> (zip ns exps))) state, False)
+        return $ (updateVals (insertAll ((\(n, ne) -> (n, Lazy $ dest2Eval v e ne state)) <$> (zip ns exps))) state, False)
 
 runStatement (DefDest dest)         state _ = return $ (updateDests (dest:) state, False)
 runStatement (DefFClass name arity fc) state _ = return $ (insertFClass name arity fc state, False)
@@ -154,21 +155,23 @@ runStatement (Run e)                state _ = case eval e state of
     (ExceptionV eType eMsg st)      -> (putStrLn $ eType  ++ " Exception: '" ++ eMsg ++ "'" ++ "\n\nStackTrace: " ++ showST st) >> return (state, True)
     _                               -> putStrLn "Can only run values of type IO!" >> return (state, True)
 
-evalDest :: String -> Expr -> Expr -> RTState -> RTValue
-evalDest v e ne state = eval (Let (NormalDef v e) ne) state
+dest2Eval :: String -> Expr -> Expr -> RTState -> Expr 
+dest2Eval v e ne state = (Let (NormalDef v e) ne)
 
 
 runIOAction :: IOAction -> RTState -> IO ()
-runIOAction (Print s) state      = putStrLn s
-runIOAction (ReadLine) state     = getLine >> return ()
-runIOAction (ReadFile _) state   = putStrLn "The IOAction ReadFile is useless unless it is used with compIO"
-runIOAction (PureIO _) state     = return ()
-runIOAction (Composed a f) state = case a of
-    Print s -> putStrLn s >> tryRun (FCall (Value f) (Value NullV))
-    ReadLine -> readBasic (strAsRTV <$> getLine)
-    ReadFile fp -> readBasic (strAsRTV <$> readFile fp)
-    PureIO v -> readBasic (return v)
-    where readBasic io = io >>= (\c -> tryRun $ FCall (Value f) (Value c))
+runIOAction (Print s) state       = putStrLn s
+runIOAction (ReadLine) state      = getLine >> return ()
+runIOAction (ReadFile _) state    = putStrLn "The IOAction ReadFile is useless unless it is used with compIO"
+runIOAction (PureIO _) state      = return ()
+runIOAction (CallCommand c) state = callCommand c
+runIOAction (Composed a f) state  = case a of
+    Print s -> runIOAction (Print s) state >> tryRun (FCall (Value $ Eager f) (Value $ Eager NullV))
+    CallCommand c -> runIOAction (CallCommand c) state >> tryRun (FCall (Value $ Eager f) (Value $ Eager NullV))
+    ReadLine -> readBasic (Eager . strAsRTV <$> getLine)
+    ReadFile fp -> readBasic (Eager . strAsRTV <$> readFile fp)
+    PureIO v -> readBasic (return $ Eager v)
+    where readBasic io = io >>= (\c -> tryRun $ FCall (Value $ Eager f) (Value c))
           tryRun ex = case eval ex state of
                        IOV a -> runIOAction a state
                        x     -> putStrLn $ "IO actions can only be composed with Functions that return other IO actions. '" ++ show x ++ "is not an IO action"
@@ -201,26 +204,32 @@ runImport path iType isQualified state fspath = do
                               isDefDest _ = False
                               isDefFC (DefFClass _ _ _) = True
                               isDefFC _ = False
+                              isImport (Import _ _ _) = True
+                              isImport _ = False
                               qF (Def (NormalDef did dex)) = if isQualified then Def $ NormalDef (getImportFromPath path did) dex else Def $ NormalDef did dex
                               --TODO: qF (Def (DestDef))
-                              sts' = (qF <$> filter isDef sts) ++ filter isDefDest sts ++ filter isDefFC sts
+                              sts' = (qF <$> filter isDef sts) ++ filter isDefDest sts ++ filter isDefFC sts ++ filter isImport sts
 
 getImportFromPath :: String -> String -> String
 getImportFromPath path did = (last $ endBy "/" path) ++ "." ++ did
 
 dEBUG = False
 
+evalVar :: EvalVar
+evalVar (Lazy e) state = eval e state
+evalVar (Eager v) _    = v
+
 eval :: Expr -> RTState -> RTValue
-eval (Value (NativeF f cls))    state = traceIf dEBUG "Value NativeF" $ NativeF f (M.unions [(getArgs state), (getClosures state),cls])
-eval (Value val)                state = traceIf dEBUG ("Value " ++ show val) $ val
+eval (Value (Eager (NativeF f cls)))    state = traceIf dEBUG "Value NativeF" $ NativeF f (M.unions [(getArgs state), (getClosures state),cls])
+eval (Value val)                state = traceIf dEBUG ("Value " ++ show val) $ evalVar val state
 eval (FCall fx ax)              state = case av of
     ExceptionV eType eMsg st ->            traceIf dEBUG "Exception in av" $ ExceptionV eType eMsg st
     _ -> let state' = updateStackTrace ((toFunName fx):) state in
         case eval fx state' of
-            (FuncV pn ex cls)   -> traceIf dEBUG "FCall" eval ex (updateClosures (M.union cls) $ updateArgs (const (M.singleton pn av)) state')
+            (FuncV pn ex cls)   -> traceIf dEBUG "FCall" eval ex (updateClosures (M.union cls) $ updateArgs (const (Eager <$> M.singleton pn av)) state')
             (NativeF f cls)     -> traceIf dEBUG "FCall NativeF" $ f av (updateClosures (M.union cls) state')
             (FClass n xs cls)   -> traceIf dEBUG "FCall FClass" $ evalFC (FClass n xs cls) cls state' state' av
-            ExceptionV et em st -> traceIf dEBUG "Exception" ExceptionV et em st
+            ExceptionV et em st -> traceIf dEBUG "Exception" $ ExceptionV et em st
             x                   -> ExceptionV "Type" ("Tried to call a value that is not a function! The value was '" ++ show x ++ "'") (getStackTrace state)
     where
         toFunName (Var n) = n
@@ -229,30 +238,32 @@ eval (FCall fx ax)              state = case av of
         toFunName (FCall fe _) = "[FCall(" ++ (toFunName fe) ++ ")]"
         toFunName _ = "[Function]"
         av = eval ax state
-        evalFC :: RTValue -> [RTValue] -> RTState -> RTState -> RTValue -> RTValue
+        evalFC :: RTValue -> [Variable] -> RTState -> RTState -> RTValue -> RTValue
         evalFC (FClass _ [] _) icls istate state av = traceIf dEBUG "FCall FClass []" $ ExceptionV "NonExhaustiveFClass" ("FClass cases are not exhaustive!") (getStackTrace state)
-        evalFC (FClass 0 ((FClassInstance _ fe):fcs) []) icls istate state av = case eval (FCall fe (Value av)) state
+        evalFC (FClass 0 ((FClassInstance _ fe):fcs) []) icls istate state av = case eval (FCall fe (Value $ Eager av)) state
             of
             (ExceptionV "FClass" _ _) -> evalFC (FClass 0 fcs icls) icls istate istate av
             x -> x
 
         evalFC (FClass 0 ((FClassInstance p fe):fcs) cls) icls istate state av = traceIf dEBUG "FCall FClass" $
             case eval fe state of
-                (FuncV pn ex fcls) -> let (a:as) = cls in evalFC (FClass 0 ((FClassInstance p (Value $ eval (FCall fe (Value a)) state)):fcs) as) icls istate (updateClosures (M.insert pn a) state) av
+                (FuncV pn ex fcls) -> let (a:as) = cls in evalFC (FClass 0 ((FClassInstance p (FCall fe (Value a))):fcs) as) icls istate (updateClosures (M.insert pn a) state) av
 
-        evalFC (FClass n fcs cls) icls istate state av = (FClass (n - 1) fcs (av:cls))
+        evalFC (FClass n fcs cls) icls istate state av = (FClass (n - 1) fcs (Eager av:cls))
 
 
-eval (Let (NormalDef n vx) ex)  state = traceIf dEBUG "Let NormalDef" $ eval ex (updateArgs (M.insert n (eval vx state)) state)
+eval (Let (NormalDef n vx) ex)  state = traceIf dEBUG "Let NormalDef" $ eval ex (updateArgs (M.insert n (Lazy vx)) state)
 eval (Let (DestDef dn ns e) ex) state = traceIf dEBUG "Let DestDef" $ case find (\(Destr dn' _ _) -> dn == dn') (getDests state) of
     Nothing -> ExceptionV "State" ("Destructuring " ++ dn ++ " does not exist!") (getStackTrace state)
     Just (Destr _ v exps) ->
-        eval ex (updateArgs (insertAll ((\(n, ne) -> (n, evalDest v e ne state)) <$> (zip ns exps))) state)
-eval (Var n)                 state = traceIf dEBUG ("Var " ++ n) $ case M.lookup n (getArgs state) <|> M.lookup n (getClosures state) <|> M.lookup n (getVals state) <|> ((\(FClassObj n fis cls) -> FClass n fis cls) <$> M.lookup n (getFClasses state)) of
-                            Just x  -> x
+        eval ex (updateArgs (insertAll ((\(n, ne) -> (n, Lazy (dest2Eval v e ne state))) <$> (zip ns exps))) state)
+eval (Var n) state = {-traceIf dEBUG ("Var " ++ n) $-} case M.lookup n (getArgs state) <|> M.lookup n (getClosures state) <|> M.lookup n (getVals state) <|> ((\(FClassObj n fis cls) -> Eager $ FClass n fis cls) <$> M.lookup n (getFClasses state)) of
+                            Just x  -> case x of
+                                Lazy e  -> eval e state
+                                Eager x -> x
                             Nothing -> ExceptionV "State" ("Value " ++ n ++ " does not exist in the current state! \n\nCurrent Args were: " ++
                                 show (getArgs state) ++ "\n\nClosures were: "
-                                ++ show (getClosures state)) (getStackTrace state)
+                                ++ show (getClosures state) ++ "\n\nVals were:" ++ show (M.keys (getVals state))) (getStackTrace state)
 
 eval (If c th el)               state = traceIf dEBUG "If" $ case (eval c state) of
     BoolV False      -> eval el state
@@ -284,9 +295,9 @@ isException :: RTValue -> Bool
 isException (ExceptionV _ _ _) = True
 isException _ = False
 
-evalF :: RTValue -> RTState -> RTValue
-evalF x state = case rtVAsMStr x of
-    Just s -> case parseEval s of
+evalF :: EvalVar -> RTValue -> RTState -> RTValue
+evalF eV x state = case rtVAsMStr x of
+    Just s -> case parseEval [] s of
         Left e -> ExceptionV "Parse" (show e) (getStackTrace state)
         Right ex -> eval ex state
     Nothing -> ExceptionV "Type" ("Can only evaluate Strings. '" ++ show x ++ "' is not a String") (getStackTrace state)
