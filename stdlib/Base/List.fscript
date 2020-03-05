@@ -1,0 +1,130 @@
+foldl 2 20 += foldlList;
+foldlList = tclass ["Function", "ANY", "List"] \f z l -> if l then let (HT x xs) = l in
+                              (foldlList f (f z x) xs)
+                              else z;
+
+
+mapI f l = mapIS f l 0;
+
+mapIS f l i =
+        if l
+        then let (HT x xs) = l in
+            cons (f x i) (mapIS f xs (i + 1))
+        else
+            [];
+
+(<$>) = map;
+(:) = cons;
+
+rangeStep s e step = if (s >= e)
+                                 then []
+                                 else cons s (rangeStep (s + step) e step);
+
+s :: e = if (s >= e)
+    then []
+    else s : ((s+1)::e);
+
+rangeI s e = range s (e + 1);
+
+(::+) = rangeI;
+
+
+repeat x i = if (i <= 0)
+    then []
+    else (x : (repeat x (i - 1)));
+
+<<HT l>> head l @ tail l;
+<<HT2 l>> head l @ getAt 1 l @ tail l;
+<<HT3 l>> head l @ getAt 1 l @ getAt 2 l @ tail l;
+<<HT4 l>> head l @ getAt 1 l @ getAt 2 l @ getAt 3 l @ tail l;
+<<HT5 l>> head l @ getAt 1 l @ getAt 2 l @ getAt 3 l @ getAt 4 l @ tail l;
+
+<<T l>> head l @ getAt 1 l @ getAt 2 l @ getAt 3 l @ getAt 4 l @ getAt 5 l @ getAt 6 l @ getAt 7 l;
+
+padStart x i l = ((repeat x (i - (length l))) + l);
+
+take i l = if ((toBool l) && (i > 0))
+    then let (HT x xs) = l in (x : (take (i - 1) xs))
+    else [];
+
+skipLast i l = take ((length l) - i) l;
+
+
+(>>=) 1 20 += tclass ["List", "Function"] (flip flatMap);
+
+any f = foldl (\acc cur -> acc || (f cur)) False;
+
+
+all f l = if (f `is_` "Function") && (l `is_` "List") then
+    if l
+    then let x = head l in let xs = tail l in
+            if f x
+            then all f xs
+            else False
+    else True
+else False;
+
+
+delete = \y -> \l -> if l
+    then let (HT x xs) = l in
+        if (x == y)
+        then xs
+        else (x:(delete y xs))
+    else [];
+
+filter 1 20 += tclass ["Function", "List"] \f l -> if l then let x = head l in let xs = tail l in
+    if f x
+        then cons x (filter f xs)
+        else filter f xs
+    else [];
+
+length 0 20 += tclass "List"
+    \l -> if l
+    then (1 + (length (tail l)))
+    else 0;
+
+reverse 0 20 += tclass "List"
+    \l -> if l
+    then let (HT x xs) = l in ((reverse xs) + [x])
+    else [];
+
+getAt 1 20 += tclass ["Num", "List"] \n -> \l -> if l
+    then let (HT x xs) = l in
+        if n
+            then getAt (n - 1) xs
+            else x
+    else Null;
+
+flatMap = tclass ["Function", "List"] \f -> \l ->
+        if l
+        then let (HT x xs) = l in
+            ((f x) + (flatMap f xs))
+        else
+            [];
+
+show 0 20 += tclass "List" \x -> "[" + (showListInner x) + "]";
+
+showListInner = \l -> if l
+    then let (HT x xs) = l in if xs
+        then ((show x) + ", " + (showListInner xs))
+        else show x
+    else "";
+
+
+map 1 20 += tclass ["Function", "List"] \f l ->
+    if l then let (HT x xs) = l in
+                 cons (f x) (map f xs)
+                 else [];
+
+
+(+) 1 20 += tclass ["List", "List"] \a b -> if a
+        then let (HT x xs) = a in (x : (xs + b))
+        else b;
+
+(-) 1 10 += tclass "List" (flip delete);
+
+(-) 1 20 += tclass ["List", "List"] \xs ys -> foldl (\a -> \c -> delete c a) xs ys;
+
+(*) 1 20 += tclass ["List", "Num"] \l n -> flatMap id (repeat l n);
+
+x !! ys = getAt x ys;

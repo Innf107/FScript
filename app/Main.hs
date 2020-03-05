@@ -157,7 +157,7 @@ runStatement (Run e)                state _ = case eval e state of
 
 
 runIOAction :: IOAction -> RTState -> IO ()
-runIOAction (Print s) state       = putStrLn s
+runIOAction (Print s) state       = putStr s
 runIOAction (ReadLine) state      = getLine >> return ()
 runIOAction (ReadFile _) state    = putStrLn "The IOAction ReadFile is useless unless it is used with compIO"
 runIOAction (PureIO _) state      = return ()

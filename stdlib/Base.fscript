@@ -1,24 +1,28 @@
+import stdlib/Base/List;
+import stdlib/Base/IO;
+import stdlib/Base/Math;
+import stdlib/Base/Record;
+import stdlib/Base/Assert;
+
 -- General
 id x = x;
+f ° g = \x -> f (g x);
+(∘) = (°);
 const x y = x;
-print x = put (show x);
-printP = put ° showP;
-printOrExec x = if ((typeof x) == "IO")
-    then x
-    else print x;
--- printOrExec = \x -> if (ord (typeof x) "IO") then print x else x;
-putRaw = put ° debugRaw;
+putLn = tclass "String" \x -> put (x + "\n");
+print = putLn ° show;
+printP = putLn ° showP;
+printOrExec x = if ((typeof x) == "IO") then x else print x;
+putRaw = putLn ° debugRaw;
 not x = if x then False else True;
 eq x y = not (ord x y);
-comp f g x = f (g x);
-(°) = comp;
-(∘) = (°);
 toBool = not ∘ not;
 flip f x y = f y x;
 x |> f = f x;
 (==) = eq;
 x /= y = not (x == y);
 (!=) = (/=);
+x >> y = x >>= (const y);
 
 is_ x t = ((typeof x) == t) || (if ((typeof x) == "Record") then ((get "Type" x) == t) else False);
 
@@ -26,160 +30,21 @@ isT = flip is;
 
 is x t = (is_ x t) || ((t == "String") && isString x) || (t == "ANY");
 
-all f l = if (f `is_` "Function") && (l `is_` "List") then
-    if l
-    then let x = head l in let xs = tail l in
-            if f x
-            then all f xs
-            else False
-    else True
-else False;
-
 isString = all (\x -> x `is_` "Char");
 
 -- Boolean
-and x y = if x then y else x;
-or  x y = if x then x else y;
-(&&)    = and;
-(||)    = or;
-lt  x y = eq -1 (ord x y);
-(<)     = lt;
-gt  x y = eq 1 (ord x y);
-(>)     = gt;
+x && y  = if x then y else x;
+x || y  = if x then x else y;
+x <  y  = -1 == (ord x y);
+x >  y  = 1 == (ord x y);
 x <= y   = not (x > y);
 x >= y   = not (x < y);
-
-
--- Math
-pi = 3.1415927;
-e  = 2.7182818;
-
-factorial n = if n
-                  then n * factorial (n - 1)
-                  else 1;
-
-powN x n = if n
-    then x * powN x (n - 1)
-    else 1;
-
-sqrt x = root 2 x;
-
-root r x = rootInner r x (round (x / 2));
-
-rootInner r x guess = if (((abs ((powN guess r) - x)) < (0.1 * x)) || guess < 0.01)
-    then guess
-    else rootInner r x ((((r - 1) * guess) + (x/(powN guess (r - 1)))) / 2);
-
-max x y = if x > y then x else y;
-min = flip max;
-
-(^) = powN;
-divBy = flip (/);
-subBy = flip (-);
-
-abs x = if (x < 0) then (0 - x) else x;
-
-
-gcd x y = gcd_ (abs x) (abs y);
-
-gcd_ x y = if y
-    then gcd_ y (x `rem` y)
-    else x;
-
-
--- Lists
-foldl 2 20 += foldlList;
-foldlList = tclass ["Function", "ANY", "List"] \f z l -> if l then let (HT x xs) = l in
-                              (foldlList f (f z x) xs)
-                              else z;
-
-
-mapI f l = mapIS f l 0;
-
-mapIS f l i =
-        if l
-        then let (HT x xs) = l in
-            cons (f x i) (mapIS f xs (i + 1))
-        else
-            [];
-
-(<$>) = map;
-(:) = cons;
-
-range s e = if (s >= e)
-                    then []
-                    else cons s (range (s + 1) e);
-
-rangeStep s e step = if (s >= e)
-                                 then []
-                                 else cons s (rangeStep (s + step) e step);
-
-(::) = range;
-
-rangeI s e = range s (e + 1);
-
-(::+) = rangeI;
-
-
-repeat x i = if (i <= 0)
-    then []
-    else (x : (repeat x (i - 1)));
-
-<<HT l>> head l @ tail l;
-<<HT2 l>> head l @ getAt 1 l @ tail l;
-<<HT3 l>> head l @ getAt 1 l @ getAt 2 l @ tail l;
-<<HT4 l>> head l @ getAt 1 l @ getAt 2 l @ getAt 3 l @ tail l;
-<<HT5 l>> head l @ getAt 1 l @ getAt 2 l @ getAt 3 l @ getAt 4 l @ tail l;
-
-<<T l>> head l @ getAt 1 l @ getAt 2 l @ getAt 3 l @ getAt 4 l @ getAt 5 l @ getAt 6 l @ getAt 7 l;
-
-padStart x i l = ((repeat x (i - (length l))) + l);
-
-take i l = if ((toBool l) && (i > 0))
-    then let (HT x xs) = l in (x : (take (i - 1) xs))
-    else [];
-
-skipLast i l = take ((length l) - i) l;
-
-any f = foldl (\acc cur -> acc || (f cur)) False;
-
-
--- IO
-(>>=) 1 20 += tclass ["IO", "Function"] compIO;
-(>>=) 1 20 += tclass ["List", "Function"] (flip flatMap);
-
-x >> y = x >>= (const y);
-
-compIOForever a f = a >>= (\x -> (f x) >>= (\y -> compIOForever a f));
-
-doAll l = if l
-    then let (HT x xs) = l in (x >> (doAll xs))
-    else pureIO Null;
-
-mapM_ f l = doAll (map f l);
-
-printAll = mapM_ print;
-
-putAll = mapM_ put;
 
 
 -- JSON compatibility
 null = Null;
 false = False;
 true = True;
-
--- Records
-update = \k -> \f -> \r -> set k (f (get k r)) r;
-
-setAll = \s -> \x -> setAllList (entries s) x;
-
-setAllList es r = if es
-    then let (HT x xs) = es in let (T k v) = x in
-    set k v (setAllList xs r)
-    else r;
-
-fromEntries es = setAllList (reverse es) {};
-
 
 -- FClasses
 tclass tl f = if (tl && (isString tl))
@@ -203,29 +68,11 @@ fclass = \pl -> \f -> if (pl `is` "Function")
 
 show 0 30 += tclass "String" \x -> ['"'] + x + ['"'];
 
-show 0 20 += tclass "List" \x -> "[" + (showListInner x) + "]";
-
-showListInner = \l -> if l
-    then let (HT x xs) = l in if xs
-        then ((show x) + ", " + (showListInner xs))
-        else show x
-    else "";
-
-show 0 20 += tclass "Record" \x -> "{" + (showRecInner (entries x)) + "}";
-
-showRecInner = \l -> if l
-    then let (HT x xs) = l in let (T k v) = x in if xs
-        then ((k + ": " + (show v)) + ", " + (showRecInner xs))
-        else (k + ": " + (show v))
-    else "";
-
 show 0 20 += tclass "Num" showNum;
 
 show 0 20 += tclass "Char" \x -> ("'" + [x] + "'");
 
 show 0 20 += tclass "Bool" \x -> if x then "True" else "False";
-
-show 0 20 += tclass "IO" (const "<IO>");
 
 show 0 20 += tclass "Function" (const "<Function>");
 
@@ -235,34 +82,10 @@ show 0 0 += const "<Unknown Type>";
 
 showP = \x -> showPInner x 0;
 
-showPInner 0 20 += tclass ["Record", "Num"] \r i -> showPRecInner r i ;
-
-showPRecInner = \r i -> let spaces = (repeat ' ' (i * 2)) in
-    spaces + "{\n" + (showPRecInner2 (entries r) (i + 1)) + "\n" + spaces + "}";
-
-showPRecInner2 = \es -> \i -> let spaces = (repeat ' ' (i * 2)) in
-    if es then let (HT x xs) = es in let (T k v) = x in
-        let sx = (spaces + k + ": " + (if ((typeof v) == "Record") then "\n" else "") + (showPInner v i)) in
-        if xs then (sx + ",\n" + (showPRecInner2 xs i))
-        else sx
-    else "";
-
-
 showPInner 0 0 += \x -> const (show x);
 
 
-map 1 20 += tclass ["Function", "List"] \f l ->
-    if l then let (HT x xs) = l in
-                 cons (f x) (map f xs)
-                 else [];
-
-map 1 20 += tclass ["Function", "Record"] \f r -> fromEntries (map f (entries r));
-
 (+) 1 20 += tclass ["Num", "Num"] addNum;
-
-(+) 1 20 += tclass ["List", "List"] \a b -> if a
-        then let (HT x xs) = a in (x : (xs + b))
-        else b;
 
 (+) 1 10 += tclass ["Bool", "Bool"] \x y -> x || y;
 
@@ -270,59 +93,6 @@ map 1 20 += tclass ["Function", "Record"] \f r -> fromEntries (map f (entries r)
 
 (-) 1 20 += tclass ["Bool", "Bool"] \x y -> if y then False else x;
 
--- Second parameter type ignored on purpose!
-(-) 1 10 += tclass "List" (flip delete);
-
-(-) 1 20 += tclass ["List", "List"] \xs ys -> foldl (\a -> \c -> delete c a) xs ys;
-
 (*) 1 20 += tclass ["Num", "Num"] mulNum;
 
-(*) 1 20 += tclass ["List", "Num"] \l n -> flatMap id (repeat l n);
-
 (/) 1 20 += tclass ["Num", "Num"] divNum;
-
-delete = \y -> \l -> if l
-    then let (HT x xs) = l in
-        if (x == y)
-        then xs
-        else (x:(delete y xs))
-    else [];
-
-filter 1 20 += tclass ["Function", "List"] \f l -> if l then let x = head l in let xs = tail l in
-    if f x
-        then cons x (filter f xs)
-        else filter f xs
-    else [];
-
-length 0 20 += tclass "List"
-    \l -> if l
-    then (1 + (length (tail l)))
-    else 0;
-
-reverse 0 20 += tclass "List"
-    \l -> if l
-    then let (HT x xs) = l in ((reverse xs) + [x])
-    else [];
-
-getAt 1 20 += tclass ["Num", "List"] \n -> \l -> if l
-    then let (HT x xs) = l in
-        if n
-            then getAt (n - 1) xs
-            else x
-    else Null;
-
-flatMap = tclass ["Function", "List"] \f -> \l ->
-        if l
-        then let (HT x xs) = l in
-            ((f x) + (flatMap f xs))
-        else
-            [];
-
-x !! ys = getAt x ys;
-
-getLine = fclass isString \s -> do
-  | put s
-  | readLine
-;
-
-import stdlib/system/IO;

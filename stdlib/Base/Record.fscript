@@ -1,0 +1,33 @@
+update = \k -> \f -> \r -> set k (f (get k r)) r;
+
+setAll = \s -> \x -> setAllList (entries s) x;
+
+setAllList es r = if es
+    then let (HT x xs) = es in let (T k v) = x in
+    set k v (setAllList xs r)
+    else r;
+
+fromEntries es = setAllList (reverse es) {};
+
+show 0 20 += tclass "Record" \x -> "{" + (showRecInner (entries x)) + "}";
+
+showRecInner = \l -> if l
+    then let (HT x xs) = l in let (T k v) = x in if xs
+        then ((k + ": " + (show v)) + ", " + (showRecInner xs))
+        else (k + ": " + (show v))
+    else "";
+
+map 1 20 += tclass ["Function", "Record"] \f r -> fromEntries (map f (entries r));
+
+showPInner 0 20 += tclass ["Record", "Num"] \r i -> showPRecInner r i ;
+
+showPRecInner = \r i -> let spaces = (repeat ' ' (i * 2)) in
+    spaces + "{\n" + (showPRecInner2 (entries r) (i + 1)) + "\n" + spaces + "}";
+
+showPRecInner2 = \es -> \i -> let spaces = (repeat ' ' (i * 2)) in
+    if es then let (HT x xs) = es in let (T k v) = x in
+        let sx = (spaces + k + ": " + (if ((typeof v) == "Record") then "\n" else "") + (showPInner v i)) in
+        if xs then (sx + ",\n" + (showPRecInner2 xs i))
+        else sx
+    else "";
+

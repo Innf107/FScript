@@ -1,0 +1,23 @@
+assert = tclass ["String", "ANY", "String", "ANY"] \name value action data -> let f = get action assertions in
+    if f
+    then f name value data
+    else throw "Type" $ "Assertion Type " + action + " does not exist!";
+
+assertBool = tclass ["String", "Bool", "String"] \name b emsg -> if b
+    then putLn $ "Success! (" + name + ")"
+    else putLn $ "~~~FAIL! " + name + " failed due to: " + emsg;
+
+assertions = {
+    toEqual: \name value data -> assertBool name (value == data) $ show value + " /= " + show data
+};
+
+
+
+--tclass "String" \n -> Assertion n Null [];
+
+--assert = tclass "String" \name b ->
+--    if not (b `is` "Bool")
+--    then putLn $ "~~~FAIL: '" + name + "' did not return a bool! It returned '" + show b + "'~~~"
+--    else if b
+--        then putLn $ "Success on " + name
+--        else putLn $ "~~~FAIL: " + name + "~~~";

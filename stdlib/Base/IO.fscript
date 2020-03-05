@@ -1,0 +1,40 @@
+(>>=) 1 20 += tclass ["IO", "Function"] compIO;
+
+
+compIOForever a f = a >>= (\x -> (f x) >>= (\y -> compIOForever a f));
+
+doAll l = if l
+    then let (HT x xs) = l in (x >> (doAll xs))
+    else pureIO Null;
+
+mapM_ f l = doAll (map f l);
+
+printAll = mapM_ print;
+
+putAll = mapM_ put;
+
+getLine = fclass isString \s -> do
+  | put s
+  | readLine
+;
+
+show 0 20 += tclass "IO" (const "<IO>");
+
+
+{-
+    type fd = {
+        Type:"FD",
+        fd::Int,
+        isNonBlocking::Int
+    }
+-}
+
+fd = \i -> \nb -> {
+    Type:"FD",
+    fd:i,
+    isNonBlocking:nb
+};
+
+stdin = fd 0 0;
+stdout = fd 1 0;
+stderr = fd 2 0;
