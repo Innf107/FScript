@@ -17,6 +17,7 @@ data Statement = NOP
                deriving (Show, Eq, Read)
 
 data Definition = NormalDef String Expr
+--                Let     (HT     x xs )= [1,2]
                 | DestDef String [String] Expr
                 deriving (Show, Eq, Read)
 
@@ -70,6 +71,7 @@ data RTState = RTState {getVals::M.Map String Variable, getArgs::M.Map String Va
 
 data FClassObj = FClassObj Int [FClassInstance] [Variable] deriving (Show, Eq, Read)
 
+--                 HT     l     [head l, tail l]
 data Destr = Destr String String [Expr] deriving (Show, Eq, Read)
 
 data IOAction = PureIO RTValue

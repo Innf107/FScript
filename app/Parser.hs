@@ -24,7 +24,7 @@ def = emptyDef { T.commentStart = "{-"
                , T.identLetter = alphaNum <|> oneOf "_"
                , T.opStart = oneOf "+-*/~%&§$!#<>|^°∘?:="
                , T.opLetter = oneOf "+-*/~%&§$!#<>|^°∘?:="
-               , T.reservedOpNames = ["$", "<-", "~", "->"]
+               , T.reservedOpNames = ["$", "<-", "~", "&", "->", "|"]
                , T.reservedNames = ["do", "if", "then", "else", "import", "exposing", "qualified", "let", "in", "infixl", "infixr", "True", "False", "Null"]
                }
 
@@ -82,16 +82,15 @@ parseAsReplExpr str = (map Run) <$> parse (many (expr [])) "REPL" str
 
 
 mainParser :: Parser [Statement]
---TODO: custom many
 mainParser = whiteSpace >> (fst <$> statements []) <* eof
 
 statements :: [Op] -> Parser ([Statement], [Op])
-statements ops = (do
+statements ops = whiteSpace >> ((do
     x <- statement ops
     case x of
         (DefOpPrec op prec assoc) -> (statements ((Op op prec assoc):ops))
         _ -> (first (x:) <$> statements ops)
-    ) <|> return ([], ops)
+    ) <|> return ([], ops))
 
 statement :: [Op] -> Parser Statement
 statement ops =
@@ -160,7 +159,8 @@ expr :: [Op] -> Parser Expr
 expr ops = buildExpressionParser (makeOpTable ops) (term ops) <?> "expression"
 
 makeOpTable :: [Op] -> [[Operator String () Identity Expr]]
-makeOpTable ops = [ [Infix (spaces >> return (\f x -> FCall f x)) AssocLeft]
+makeOpTable ops = [ [Prefix (reservedOp "~" >> return (FCall $ Var "flip"))]
+                  , [Infix (spaces >> return (\f x -> FCall f x)) AssocLeft]
                   , [Prefix (symbol "-" >> return (\x -> FCall (FCall (Var "-") (Literal (NumL 0))) x))]
                   ]
                   ++
@@ -169,7 +169,7 @@ makeOpTable ops = [ [Infix (spaces >> return (\f x -> FCall f x)) AssocLeft]
                   [ [Infix (operator >>= \p -> return (\x y -> FCall (FCall (Var p) x) y)) AssocLeft]
                   , [Infix ((symbol "`" >> identifier <* symbol "`") >>= \p -> return (\x y -> FCall (FCall (Var p) x) y)) AssocLeft]
                   , [Infix (reservedOp "$" >> return FCall) AssocRight]
-                  , [Infix (reservedOp "~" >> return (\x f -> FCall f x)) AssocLeft]
+                  , [Infix (reservedOp "&" >> return (\x f -> FCall f x)) AssocLeft]
                   ]
 
 opsToTable :: [Op] -> [[Operator String () Identity Expr]]
@@ -188,23 +188,31 @@ term ops =  try (Var <$> parens operator)
 data DoVar = DoVar String Expr | DoEx Expr
 
 doE :: [Op] -> Parser Expr
-doE ops = do
-    reserved "do"
-    doVs <- braces $ semiSep (try doVar <|> fmap DoEx (expr ops))
-    return (createDo doVs)
+doE ops = try (bracketDoE ops) <|> pipeDoE ops
     where
-        doVar = do
-            x <- identifier
-            reservedOp "<-"
-            e <- expr ops
-            return $ DoVar x e
-        createDo :: [DoVar] -> Expr
-        createDo ((DoEx e):[]) = e
-        createDo ((DoVar _ e):[]) = e
-        createDo ((DoEx e):dvs) = (FCall (FCall (Var ">>=") e) (Literal (LambdaL "_" (createDo dvs))))
-        createDo ((DoVar i e):dvs) = (FCall (FCall (Var ">>=") e) (Literal (LambdaL i (createDo dvs))))
+    bracketDoE :: [Op] -> Parser Expr
+    bracketDoE ops = do
+        reserved "do"
+        doVs <- braces $ semiSep (try doVar <|> fmap DoEx (expr ops))
+        return (createDo doVs)
 
-
+    pipeDoE :: [Op] -> Parser Expr
+    pipeDoE ops = do
+        reserved "do"
+        optional (reservedOp "|")
+        doVs <- (try doVar <|> fmap DoEx (expr ops)) `sepBy1` (reservedOp "|")
+        return $ createDo doVs
+        
+    doVar = do
+        x <- identifier
+        reservedOp "<-"
+        e <- expr ops
+        return $ DoVar x e
+    createDo :: [DoVar] -> Expr
+    createDo ((DoEx e):[]) = e
+    createDo ((DoVar _ e):[]) = e
+    createDo ((DoEx e):dvs) = (FCall (FCall (Var ">>=") e) (Literal (LambdaL "_" (createDo dvs))))
+    createDo ((DoVar i e):dvs) = (FCall (FCall (Var ">>=") e) (Literal (LambdaL i (createDo dvs))))
 
 letE :: [Op] -> Parser Expr
 letE ops = (do

@@ -63,7 +63,7 @@ emptyState = RTState {getVals=Eager <$> M.fromList (nativeFs ++ nativeVals), get
 
 nativeFs :: [(String, RTValue)]
 nativeFs = (\(x, y) -> (x, NativeF (y evalVar) M.empty)) <$> [("put", putF), ("debugRaw", debugRawF), ("head", headF),
-    ("tail", tailF), ("exec", execF), ("typeof", typeofF), ("eval", evalF), ("pureIO", pureIOF), 
+    ("tail", tailF), ("typeof", typeofF), ("eval", evalF), ("pureIO", pureIOF), ("sys", sysF),
     ("round", roundF), ("showNum", showNumF), ("entries", entriesF), ("debugState", debugStateF), ("toCode", toCodeF)]
 
 nativeVals :: [(String, RTValue)]
@@ -74,7 +74,6 @@ nativeVals = (second (\f -> f evalVar)) <$> [("addNum", addNumF), ("subNum", sub
 main :: IO ()
 main = do
         fspath <- SE.getEnv "FSPATH" <|> ((++"/.fscript/") <$> SE.getEnv "HOME")
-        putStrLn fspath
         args <- SE.getArgs
         let repl = "--repl" `elem` args || "-r" `elem` args
         let debugParse = "--debug-parse" `elem` args
@@ -155,8 +154,6 @@ runStatement (Run e)                state _ = case eval e state of
     (ExceptionV eType eMsg st)      -> (putStrLn $ eType  ++ " Exception: '" ++ eMsg ++ "'" ++ "\n\nStackTrace: " ++ showST st) >> return (state, True)
     _                               -> putStrLn "Can only run values of type IO!" >> return (state, True)
 
-dest2Eval :: String -> Expr -> Expr -> RTState -> Expr 
-dest2Eval v e ne state = (Let (NormalDef v e) ne)
 
 
 runIOAction :: IOAction -> RTState -> IO ()
@@ -168,10 +165,10 @@ runIOAction (CallCommand c) state = callCommand c
 runIOAction (Composed a f) state  = case a of
     Print s -> runIOAction (Print s) state >> tryRun (FCall (Value $ Eager f) (Value $ Eager NullV))
     CallCommand c -> runIOAction (CallCommand c) state >> tryRun (FCall (Value $ Eager f) (Value $ Eager NullV))
-    ReadLine -> readBasic (Eager . strAsRTV <$> getLine)
-    ReadFile fp -> readBasic (Eager . strAsRTV <$> readFile fp)
-    PureIO v -> readBasic (return $ Eager v)
-    where readBasic io = io >>= (\c -> tryRun $ FCall (Value $ Eager f) (Value c))
+    ReadLine -> readBasic (strAsRTV <$> getLine)
+    ReadFile fp -> readBasic (strAsRTV <$> readFile fp)
+    PureIO v -> readBasic (return v)
+    where readBasic io = io >>= (\c -> tryRun $ FCall (Value $ Eager f) (Value $ Eager c))
           tryRun ex = case eval ex state of
                        IOV a -> runIOAction a state
                        x     -> putStrLn $ "IO actions can only be composed with Functions that return other IO actions. '" ++ show x ++ "is not an IO action"
@@ -219,6 +216,12 @@ evalVar :: EvalVar
 evalVar (Lazy e) state = eval e state
 evalVar (Eager v) _    = v
 
+dest2Eval :: String -> Expr -> Expr -> RTState -> Expr
+dest2Eval v e ne state = (Let (NormalDef v e) ne)
+
+-- \l -> let l = l in head l
+-- Let (NormalDef l (Var l) {head l})
+
 eval :: Expr -> RTState -> RTValue
 eval (Value (Eager (NativeF f cls)))    state = traceIf dEBUG "Value NativeF" $ NativeF f (M.unions [(getArgs state), (getClosures state),cls])
 eval (Value val)                state = traceIf dEBUG ("Value " ++ show val) $ evalVar val state
@@ -252,11 +255,12 @@ eval (FCall fx ax)              state = case av of
         evalFC (FClass n fcs cls) icls istate state av = (FClass (n - 1) fcs (Eager av:cls))
 
 
-eval (Let (NormalDef n vx) ex)  state = traceIf dEBUG "Let NormalDef" $ eval ex (updateArgs (M.insert n (Lazy vx)) state)
+eval (Let (NormalDef n vx) ex)  state = traceIf dEBUG "Let NormalDef" $ eval ex (updateArgs (M.insert n (Eager (eval vx state))) state)
 eval (Let (DestDef dn ns e) ex) state = traceIf dEBUG "Let DestDef" $ case find (\(Destr dn' _ _) -> dn == dn') (getDests state) of
     Nothing -> ExceptionV "State" ("Destructuring " ++ dn ++ " does not exist!") (getStackTrace state)
     Just (Destr _ v exps) ->
         eval ex (updateArgs (insertAll ((\(n, ne) -> (n, Lazy (dest2Eval v e ne state))) <$> (zip ns exps))) state)
+
 eval (Var n) state = {-traceIf dEBUG ("Var " ++ n) $-} case M.lookup n (getArgs state) <|> M.lookup n (getClosures state) <|> M.lookup n (getVals state) <|> ((\(FClassObj n fis cls) -> Eager $ FClass n fis cls) <$> M.lookup n (getFClasses state)) of
                             Just x  -> case x of
                                 Lazy e  -> eval e state

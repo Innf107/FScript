@@ -163,10 +163,6 @@ tailF eV x state = case x of
     ListV (_:xs) -> ListV xs
     x            -> ExceptionV "Type" ("'tail' needs its argument to be a list. '" ++ show x ++ "' is not a List!") (getStackTrace state)
 
-execF :: EvalVar -> RTValue -> RTState -> RTValue
-execF eV (IOV a) state = IOV a
-execF eV x       state = ExceptionV "Type" ("Can only run 'exec' on values of type IO. '" ++ show x ++ "' does not have the type IO!") (getStackTrace state)
-
 typeofF :: EvalVar -> RTValue -> RTState -> RTValue
 typeofF eV (IOV _)            state = strAsRTV "IO"
 typeofF eV (CharV _)          state = strAsRTV "Char"
