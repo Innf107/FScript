@@ -24,7 +24,7 @@ def = emptyDef { T.commentStart = "{-"
                , T.identLetter = alphaNum <|> oneOf "_"
                , T.opStart = oneOf "+-*/~%&§$!#<>|^°∘?:="
                , T.opLetter = oneOf "+-*/~%&§$!#<>|^°∘?:="
-               , T.reservedOpNames = ["$", "<-", "~", "&", "->", "|"]
+               , T.reservedOpNames = ["$", "<-", "~", "&", "->", "|", "@"]
                , T.reservedNames = ["do", "if", "then", "else", "import", "exposing", "qualified", "let", "in", "infixl", "infixr", "True", "False", "Null"]
                }
 
@@ -179,6 +179,7 @@ opsToTable ops = (`map` opTable) (map (\(Op op _ assoc) -> Infix (symbol op >>= 
 term :: [Op] -> Parser Expr
 term ops =  try (Var <$> parens operator)
     <|> parens (expr ops)
+    <|> try (interpStringE ops)
     <|> Literal <$> litE ops
     <|> letE ops
     <|> ifE ops
@@ -275,6 +276,25 @@ listL ops = ListL <$> brackets (commaSep (expr ops))
 
 stringL :: Parser Lit
 stringL = ListL <$> (fmap (Literal . CharL) <$> stringLiteral)
+
+interpStr :: [Op] -> Parser [Expr]
+interpStr ops = char '@' >> between (char '\"') (char '\"') interpStrInner
+    where
+        interpStrInner :: Parser [Expr]
+        interpStrInner = many $ (asEx <$> many1 (noneOf "$\"")) <|> (char '$' >> between (char '{') (char '}') (expr ops))
+        asEx :: String -> Expr
+        asEx s = Literal $ ListL $ Literal . CharL <$> s
+
+
+
+interpStringE :: [Op] -> Parser Expr
+interpStringE ops = do
+    pieces <- lexeme $ interpStr ops
+    return $ catAll pieces
+    where
+        catAll :: [Expr] -> Expr
+        catAll [] = Literal $ ListL []
+        catAll (e:es) = FCall (FCall (Var "+") e) $ catAll es
 
 recordL :: [Op] -> Parser Lit
 recordL ops = fmap RecordL $ braces $ commaSep $ do
