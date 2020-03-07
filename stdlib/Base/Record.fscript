@@ -9,7 +9,7 @@ setAllList es r = if es
 
 fromEntries es = setAllList (reverse es) {};
 
-show 0 20 += tclass "Record" \x -> "{" + (showRecInner (entries x)) + "}";
+show 1 20 += tclass "Record" \x -> "{" + (showRecInner (entries x)) + "}";
 
 showRecInner = \l -> if l
     then let (HT x xs) = l in let (T k v) = x in if xs
@@ -17,9 +17,9 @@ showRecInner = \l -> if l
         else (k + ": " + (show v))
     else "";
 
-map 1 20 += tclass ["Function", "Record"] \f r -> fromEntries (map f (entries r));
+map 2 20 += tclass ["Function", "Record"] \f r -> fromEntries (map f (entries r));
 
-showPInner 0 20 += tclass ["Record", "Num"] \r i -> showPRecInner r i ;
+showPInner 1 20 += tclass ["Record", "Num"] \r i -> showPRecInner r i ;
 
 showPRecInner = \r i -> let spaces = (repeat ' ' (i * 2)) in
     spaces + "{\n" + (showPRecInner2 (entries r) (i + 1)) + "\n" + spaces + "}";

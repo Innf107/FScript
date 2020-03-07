@@ -146,7 +146,7 @@ defDestS ops = do
 defFClassS :: [Op] -> Parser Statement
 defFClassS ops = do
     name <- identifier <|> parens operator
-    arity <- fromInteger <$> natural
+    arity <- ((+ (-1)) . fromInteger) <$> natural
     prec <- fromInteger <$> natural
     symbol "+="
     e <- expr ops

@@ -2,7 +2,6 @@ import stdlib/Base/List;
 import stdlib/Base/IO;
 import stdlib/Base/Math;
 import stdlib/Base/Record;
-import stdlib/Base/Assert;
 
 -- General
 id x = x;
@@ -66,33 +65,33 @@ fclass = \pl -> \f -> if (pl `is` "Function")
         else f;
 
 
-show 0 30 += tclass "String" \x -> ['"'] + x + ['"'];
+show 1 30 += tclass "String" \x -> ['"'] + x + ['"'];
 
-show 0 20 += tclass "Num" showNum;
+show 1 20 += tclass "Num" showNum;
 
-show 0 20 += tclass "Char" \x -> ("'" + [x] + "'");
+show 1 20 += tclass "Char" \x -> ("'" + [x] + "'");
 
-show 0 20 += tclass "Bool" \x -> if x then "True" else "False";
+show 1 20 += tclass "Bool" \x -> if x then "True" else "False";
 
-show 0 20 += tclass "Function" (const "<Function>");
+show 1 20 += tclass "Function" (const "<Function>");
 
-show 0 20 += tclass "Null" (const "Null");
+show 1 20 += tclass "Null" (const "Null");
 
-show 0 0 += const "<Unknown Type>";
+show 1 0 += const "<Unknown Type>";
 
 showP = \x -> showPInner x 0;
 
-showPInner 0 0 += \x -> const (show x);
+showPInner 1 0 += \x -> const (show x);
 
 
-(+) 1 20 += tclass ["Num", "Num"] addNum;
+(+) 2 20 += tclass ["Num", "Num"] addNum;
 
-(+) 1 10 += tclass ["Bool", "Bool"] \x y -> x || y;
+(+) 2 10 += tclass ["Bool", "Bool"] \x y -> x || y;
 
-(-) 1 20 += tclass ["Num", "Num"] subNum;
+(-) 2 20 += tclass ["Num", "Num"] subNum;
 
-(-) 1 20 += tclass ["Bool", "Bool"] \x y -> if y then False else x;
+(-) 2 20 += tclass ["Bool", "Bool"] \x y -> if y then False else x;
 
-(*) 1 20 += tclass ["Num", "Num"] mulNum;
+(*) 2 20 += tclass ["Num", "Num"] mulNum;
 
-(/) 1 20 += tclass ["Num", "Num"] divNum;
+(/) 2 20 += tclass ["Num", "Num"] divNum;

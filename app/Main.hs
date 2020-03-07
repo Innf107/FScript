@@ -34,7 +34,7 @@ updateVals :: (M.Map String Variable -> M.Map String Variable) -> RTState -> RTS
 updateVals f state = state {getVals=f(getVals state)}
 
 updateVal :: (Variable -> Variable) -> String -> RTState -> RTState
-updateVal f k state = state {getVals=M.adjust f k $ getVals state}
+updateVal f k state = state {getVals=M.adjust f k $ getVals state, getArgs=M.adjust f k $ getArgs state, getClosures = M.adjust f k $ getClosures state}
 
 updateArgs :: (M.Map String Variable -> M.Map String Variable) -> RTState -> RTState
 updateArgs f state = state {getArgs=f (getArgs state)}

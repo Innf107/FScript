@@ -1,12 +1,28 @@
-assert = tclass ["String", "ANY", "String", "ANY"] \name value action data -> let f = get action assertions in
-    if f
-    then f name value data
-    else throw "Type" $ "Assertion Type " + action + " does not exist!";
+assert = assertInner True;
 
-assertBool = tclass ["String", "Bool", "String"] \name b emsg -> if b
-    then putLn $ "Success! (" + name + ")"
-    else putLn $ "~~~FAIL! " + name + " failed due to: " + emsg;
+assertInner = tclass ["Bool", "String", "ANY", "String"] \printA name value action -> let f = get action assertions in
+    if f
+        then f printA name value
+        else throw "Argument" $ "Assertion Type " + action + " does not exist!";
+
+assertBool = tclass ["String", "Bool", "String", "Bool"] \name b emsg printA -> if printA
+    then if b
+            then putLn $ "Success! (" + name + ")"
+            else putLn $ "~~~FAIL! " + name + " failed due to: " + emsg
+    else b;
 
 assertions = {
-    toEqual: \name value data -> assertBool name (value == data) $ show value + " /= " + show data
+    toEqual:       \printA name value data -> assertBool name (value == data)        (show value + " /= " + show data) printA,
+    notToEqual:    \printA name value data -> assertBool name (value /= data)        (show value + " /= " + show data) printA,
+    toBeTruthy:    \printA name value ->      assertBool name value                  (show value + " is falsy, but should be truthy") printA,
+    toBeFalsy:     \printA name value ->      assertBool name (not value)            (show value + " is truthy, but should be falsy") printA,
+    toBeTrue:      \printA name value ->      assertBool name (value == True)        (show value + " is not equal to True") printA,
+    toBeFalse:     \printA name value ->      assertBool name (value == False)       (show value + " is not equal to False") printA,
+    toBeNull:      \printA name value ->      assertBool name (value == Null)        (show value + " is not Null") printA,
+    notToBeNull:   \printA name value ->      assertBool name (value /= Null)        (show value + " should not be Null") printA,
+    toBe:          \printA name value data -> assertBool name (value `is` data)      ("(" + show value + " `is` " + data + ") /= True") printA,
+    notToBe:       \printA name value data -> assertBool name (not (value `is` data))("(" + show value + " `is` " + data + ") /= False") printA,
+    toBeOfType:    \printA name value data -> assertBool name (typeof value == data) ("typeof " + show value + " /= " + data) printA,
+    notToBeOfType: \printA name value data -> assertBool name (typeof value /= data) ("typeof " + show value + " == " + data) printA,
+    forAll:        \printA name value action_ data_-> assertBool name (all (\x -> assertInner False name x action_ data_) value) ("Not all assertions matched") printA
 };

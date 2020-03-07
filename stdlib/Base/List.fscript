@@ -1,4 +1,4 @@
-foldl 2 20 += foldlList;
+foldl 3 20 += foldlList;
 foldlList = tclass ["Function", "ANY", "List"] \f z l -> if l then let (HT x xs) = l in
                               (foldlList f (f z x) xs)
                               else z;
@@ -50,7 +50,7 @@ take i l = if ((toBool l) && (i > 0))
 skipLast i l = take ((length l) - i) l;
 
 
-(>>=) 1 20 += tclass ["List", "Function"] (flip flatMap);
+(>>=) 2 20 += tclass ["List", "Function"] (flip flatMap);
 
 any f = foldl (\acc cur -> acc || (f cur)) False;
 
@@ -72,23 +72,23 @@ delete = \y -> \l -> if l
         else (x:(delete y xs))
     else [];
 
-filter 1 20 += tclass ["Function", "List"] \f l -> if l then let x = head l in let xs = tail l in
+filter 2 20 += tclass ["Function", "List"] \f l -> if l then let x = head l in let xs = tail l in
     if f x
         then cons x (filter f xs)
         else filter f xs
     else [];
 
-length 0 20 += tclass "List"
+length 1 20 += tclass "List"
     \l -> if l
     then (1 + (length (tail l)))
     else 0;
 
-reverse 0 20 += tclass "List"
+reverse 1 20 += tclass "List"
     \l -> if l
     then let (HT x xs) = l in ((reverse xs) + [x])
     else [];
 
-getAt 1 20 += tclass ["Num", "List"] \n -> \l -> if l
+getAt 2 20 += tclass ["Num", "List"] \n -> \l -> if l
     then let (HT x xs) = l in
         if n
             then getAt (n - 1) xs
@@ -102,7 +102,7 @@ flatMap = tclass ["Function", "List"] \f -> \l ->
         else
             [];
 
-show 0 20 += tclass "List" \x -> "[" + (showListInner x) + "]";
+show 1 20 += tclass "List" \x -> "[" + (showListInner x) + "]";
 
 showListInner = \l -> if l
     then let (HT x xs) = l in if xs
@@ -111,20 +111,20 @@ showListInner = \l -> if l
     else "";
 
 
-map 1 20 += tclass ["Function", "List"] \f l ->
+map 2 20 += tclass ["Function", "List"] \f l ->
     if l then let (HT x xs) = l in
                  cons (f x) (map f xs)
                  else [];
 
 
-(+) 1 20 += tclass ["List", "List"] \a b -> if a
+(+) 2 20 += tclass ["List", "List"] \a b -> if a
         then let (HT x xs) = a in (x : (xs + b))
         else b;
 
-(-) 1 10 += tclass "List" (flip delete);
+(-) 2 10 += tclass "List" (flip delete);
 
-(-) 1 20 += tclass ["List", "List"] \xs ys -> foldl (\a -> \c -> delete c a) xs ys;
+(-) 2 20 += tclass ["List", "List"] \xs ys -> foldl (\a -> \c -> delete c a) xs ys;
 
-(*) 1 20 += tclass ["List", "Num"] \l n -> flatMap id (repeat l n);
+(*) 2 20 += tclass ["List", "Num"] \l n -> flatMap id (repeat l n);
 
 x !! ys = getAt x ys;
