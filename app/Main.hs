@@ -25,27 +25,28 @@ import NativeFs
 import System.Console.ANSI
 import Control.Parallel.Strategies
 import Data.Bifunctor
+import Control.Monad.State
 import qualified Data.Map as M
+import Control.Monad.State.Lazy (State(..))
+import Control.Monad.Identity (Identity(..))
 
 updateVals :: (M.Map String Variable -> M.Map String Variable) -> RTState -> RTState
-updateVals f state = RTState {getVals=f(getVals state), getArgs=getArgs state, getClosures = (getClosures state),
-                              getDests=getDests state, getFClasses=getFClasses state, getStackTrace=getStackTrace state}
+updateVals f state = state {getVals=f(getVals state)}
+
+updateVal :: (Variable -> Variable) -> String -> RTState -> RTState
+updateVal f k state = state {getVals=M.adjust f k $ getVals state}
 
 updateArgs :: (M.Map String Variable -> M.Map String Variable) -> RTState -> RTState
-updateArgs f state = RTState {getVals=getVals state, getArgs=f (getArgs state), getClosures = (getClosures state),
-                              getDests=getDests state, getFClasses=getFClasses state, getStackTrace=getStackTrace state}
+updateArgs f state = state {getArgs=f (getArgs state)}
 
 updateClosures :: (M.Map String Variable -> M.Map String Variable) -> RTState -> RTState
-updateClosures f state = RTState {getVals=getVals state, getArgs= (getArgs state), getClosures =f (getClosures state),
-                                  getDests=getDests state, getFClasses=getFClasses state, getStackTrace=getStackTrace state}
+updateClosures f state = state {getClosures=f (getClosures state)}
 
 updateDests :: ([Destr] -> [Destr]) -> RTState -> RTState
-updateDests f state = RTState {getVals=getVals state, getArgs=getArgs state, getClosures=getClosures state,
-                               getDests=f (getDests state), getFClasses=getFClasses state, getStackTrace=getStackTrace state}
+updateDests f state = state {getDests=f (getDests state)}
 
 updateStackTrace :: ([String] -> [String]) -> RTState -> RTState
-updateStackTrace f state = RTState {getVals=getVals state, getArgs=getArgs state, getClosures=getClosures state,
-                               getDests=getDests state, getFClasses=getFClasses state, getStackTrace=f $ getStackTrace state}
+updateStackTrace f state = state {getStackTrace=f $ getStackTrace state}
 
 insertFClass :: String -> Int -> FClassInstance -> RTState -> RTState
 insertFClass name arity fc state = RTState {getVals=getVals state, getArgs=getArgs state, getClosures=getClosures state,
@@ -149,7 +150,7 @@ runStatement (Def (DestDef dn ns e))state _ = case find (\(Destr dn' _ _) -> dn 
 
 runStatement (DefDest dest)         state _ = return $ (updateDests (dest:) state, False)
 runStatement (DefFClass name arity fc) state _ = return $ (insertFClass name arity fc state, False)
-runStatement (Run e)                state _ = case eval e state of
+runStatement (Run e)                state _ = case evalfst' e state of
     (IOV a)                         -> runIOAction a state >> return (state, False)
     (ExceptionV eType eMsg st)      -> (putStrLn $ eType  ++ " Exception: '" ++ eMsg ++ "'" ++ "\n\nStackTrace: " ++ showST st) >> return (state, True)
     _                               -> putStrLn "Can only run values of type IO!" >> return (state, True)
@@ -169,7 +170,7 @@ runIOAction (Composed a f) state  = case a of
     ReadFile fp -> readBasic (strAsRTV <$> readFile fp)
     PureIO v -> readBasic (return v)
     where readBasic io = io >>= (\c -> tryRun $ FCall (Value $ Eager f) (Value $ Eager c))
-          tryRun ex = case eval ex state of
+          tryRun ex = case evalfst' ex state of
                        IOV a -> runIOAction a state
                        x     -> putStrLn $ "IO actions can only be composed with Functions that return other IO actions. '" ++ show x ++ "is not an IO action"
 
@@ -213,7 +214,7 @@ getImportFromPath path did = (last $ endBy "/" path) ++ "." ++ did
 dEBUG = False
 
 evalVar :: EvalVar
-evalVar (Lazy e) state = eval e state
+evalVar (Lazy e) state = evalfst' e state
 evalVar (Eager v) _    = v
 
 dest2Eval :: String -> Expr -> Expr -> RTState -> Expr
@@ -222,78 +223,109 @@ dest2Eval v e ne state = (Let (NormalDef v e) ne)
 -- \l -> let l = l in head l
 -- Let (NormalDef l (Var l) {head l})
 
-eval :: Expr -> RTState -> RTValue
-eval (Value (Eager (NativeF f cls)))    state = traceIf dEBUG "Value NativeF" $ NativeF f (M.unions [(getArgs state), (getClosures state),cls])
-eval (Value val)                state = traceIf dEBUG ("Value " ++ show val) $ evalVar val state
-eval (FCall fx ax)              state = case av of
-    ExceptionV eType eMsg st ->            traceIf dEBUG "Exception in av" $ ExceptionV eType eMsg st
-    _ -> let state' = updateStackTrace ((toFunName fx):) state in
-        case eval fx state' of
-            (FuncV pn ex cls)   -> traceIf dEBUG "FCall" eval ex (updateClosures (M.union cls) $ updateArgs (const (Eager <$> M.singleton pn av)) state')
-            (NativeF f cls)     -> traceIf dEBUG "FCall NativeF" $ f av (updateClosures (M.union cls) state')
-            (FClass n xs cls)   -> traceIf dEBUG "FCall FClass" $ evalFC (FClass n xs cls) cls state' state' av
-            ExceptionV et em st -> traceIf dEBUG "Exception" $ ExceptionV et em st
-            x                   -> ExceptionV "Type" ("Tried to call a value that is not a function! The value was '" ++ show x ++ "'") (getStackTrace state)
+--TODO: TEMP
+evalfst' :: Expr -> RTState -> RTValue
+evalfst' ex state = fst $ runState (eval ex) state
+
+eval :: Expr -> State RTState RTValue
+eval (Value (Eager (NativeF f cls)))  = traceIf dEBUG "Value NativeF" $ do
+    state <- get
+    return $ NativeF f (M.unions [(getArgs state), (getClosures state),cls])
+eval (Value val)                      = get >>= \state -> return $ traceIf dEBUG ("Value " ++ show val) $ evalVar val state
+-- TODO:                                                         Update state accordingly
+eval (FCall fx ax)                    = get >>= \state -> do
+    av <- eval ax
+    case av of
+        ExceptionV eType eMsg st -> return $ traceIf dEBUG "Exception in av" $ ExceptionV eType eMsg st
+        _ -> let state' = updateStackTrace ((toFunName fx):) state in
+            case fst $ runState (eval fx) state' of
+                (FuncV pn ex cls)   -> traceIf dEBUG "FCall" $ do 
+                    x <- eval ex 
+                    put (updateClosures (M.union cls) $ updateArgs (const (Eager <$> M.singleton pn av)) state')
+                    return x
+                (NativeF f cls)     -> return $ traceIf dEBUG "FCall NativeF" $ f av (updateClosures (M.union cls) state')
+                (FClass n xs cls)   -> return $ traceIf dEBUG "FCall FClass" $ evalFC (FClass n xs cls) cls state' state' av
+                ExceptionV et em st -> return $ traceIf dEBUG "Exception" $ ExceptionV et em st
+                x                   -> return $ ExceptionV "Type" ("Tried to call a value that is not a function! The value was '" ++ show x ++ "'") (getStackTrace state)
     where
         toFunName (Var n) = n
         toFunName (Literal (LambdaL _ _)) = "[Lambda]"
         toFunName (If _ _ _) = "[If]"
         toFunName (FCall fe _) = "[FCall(" ++ (toFunName fe) ++ ")]"
         toFunName _ = "[Function]"
-        av = eval ax state
         evalFC :: RTValue -> [Variable] -> RTState -> RTState -> RTValue -> RTValue
         evalFC (FClass _ [] _) icls istate state av = traceIf dEBUG "FCall FClass []" $ ExceptionV "NonExhaustiveFClass" ("FClass cases are not exhaustive!") (getStackTrace state)
-        evalFC (FClass 0 ((FClassInstance _ fe):fcs) []) icls istate state av = case eval (FCall fe (Value $ Eager av)) state
+        --TODO:                                                                       -----
+        evalFC (FClass 0 ((FClassInstance _ fe):fcs) []) icls istate state av = case evalfst' (FCall fe (Value $ Eager av)) state
             of
             (ExceptionV "FClass" _ _) -> evalFC (FClass 0 fcs icls) icls istate istate av
             x -> x
 
         evalFC (FClass 0 ((FClassInstance p fe):fcs) cls) icls istate state av = traceIf dEBUG "FCall FClass" $
-            case eval fe state of
+        --TODO:  -------
+            case evalfst' fe state of
                 (FuncV pn ex fcls) -> let (a:as) = cls in evalFC (FClass 0 ((FClassInstance p (FCall fe (Value a))):fcs) as) icls istate (updateClosures (M.insert pn a) state) av
 
         evalFC (FClass n fcs cls) icls istate state av = (FClass (n - 1) fcs (Eager av:cls))
 
 
-eval (Let (NormalDef n vx) ex)  state = traceIf dEBUG "Let NormalDef" $ eval ex (updateArgs (M.insert n (Eager (eval vx state))) state)
-eval (Let (DestDef dn ns e) ex) state = traceIf dEBUG "Let DestDef" $ case find (\(Destr dn' _ _) -> dn == dn') (getDests state) of
-    Nothing -> ExceptionV "State" ("Destructuring " ++ dn ++ " does not exist!") (getStackTrace state)
-    Just (Destr _ v exps) ->
-        eval ex (updateArgs (insertAll ((\(n, ne) -> (n, Lazy (dest2Eval v e ne state))) <$> (zip ns exps))) state)
+eval (Let (NormalDef n vx) ex) = do
+        vx' <- eval vx
+        state <- get
+        put (updateArgs (M.insert n (Eager vx')) state)
+        x <- eval ex
+        return x
+eval (Let (DestDef dn ns e) ex) = get >>= \state -> traceIf dEBUG "Let DestDef" $ case find (\(Destr dn' _ _) -> dn == dn') (getDests state) of
+    Nothing -> return $ ExceptionV "State" ("Destructuring " ++ dn ++ " does not exist!") (getStackTrace state)
+    Just (Destr _ v exps) -> do
+        x <- eval ex
+        state' <- get
+        put (updateArgs (insertAll ((\(n, ne) -> (n, Lazy (dest2Eval v e ne state'))) <$> (zip ns exps))) state')
+        return x
 
-eval (Var n) state = {-traceIf dEBUG ("Var " ++ n) $-} case M.lookup n (getArgs state) <|> M.lookup n (getClosures state) <|> M.lookup n (getVals state) <|> ((\(FClassObj n fis cls) -> Eager $ FClass n fis cls) <$> M.lookup n (getFClasses state)) of
+eval (Var n) = get >>= \state -> case M.lookup n (getArgs state) <|> M.lookup n (getClosures state) <|> M.lookup n (getVals state) <|> ((\(FClassObj n fis cls) -> Eager $ FClass n fis cls) <$> M.lookup n (getFClasses state)) of
                             Just x  -> case x of
-                                Lazy e  -> eval e state
-                                Eager x -> x
-                            Nothing -> ExceptionV "State" ("Value " ++ n ++ " does not exist in the current state! \n\nCurrent Args were: " ++
+                                Lazy e  -> do
+                                            x <- eval e
+                                            state' <- get
+                                            put (updateVal (const $ Eager x) n state')
+                                            return x
+                                Eager x -> return x
+                            Nothing -> return $ ExceptionV "State" ("Value " ++ n ++ " does not exist in the current state! \n\nCurrent Args were: " ++
                                 show (getArgs state) ++ "\n\nClosures were: "
                                 ++ show (getClosures state) ++ "\n\nVals were:" ++ show (M.keys (getVals state))) (getStackTrace state)
 
-eval (If c th el)               state = traceIf dEBUG "If" $ case (eval c state) of
-    BoolV False      -> eval el state
-    NumV 0           -> eval el state
-    NullV            -> eval el state
-    ListV []         -> eval el state
-    RecordV []       -> eval el state
-    ExceptionV t m s -> ExceptionV t m s
-    _                -> eval th state
+eval (If c th el)               = get >>= \state -> traceIf dEBUG "If" $ do 
+    c' <- eval c 
+    case (c') of
+        BoolV False      -> eval el
+        NumV 0           -> eval el
+        NullV            -> eval el
+        ListV []         -> eval el
+        RecordV []       -> eval el
+        ExceptionV t m s -> return $ ExceptionV t m s
+        _                -> eval th
 
-eval (Literal l)                state = traceIf dEBUG ("Literal " ++ show l) $ case l of
-    NumL x       -> NumV x
-    CharL x      -> CharV x
-    BoolL x      -> BoolV x
-    NullL        -> NullV
-    ListL xps    -> case ex of
-        Just e  -> e
-        Nothing -> ListV $ args
-        where args = ((`eval` state) <$> xps)
-              ex = find isException args
-    LambdaL n xp -> FuncV n xp (M.union (getArgs state) (getClosures state))
-    RecordL xps     -> case ex of
-        Just e -> snd e
-        Nothing -> RecordV args
-        where args = (\(x, y) -> (x, eval y state)) <$> xps
-              ex = find (isException . snd) args
+eval (Literal l)                = get >>= \state -> traceIf dEBUG ("Literal " ++ show l) $ case l of
+    NumL x       -> return $ NumV x
+    CharL x      -> return $ CharV x
+    BoolL x      -> return $ BoolV x
+    NullL        -> return NullV
+    ListL xps    -> do 
+        args <- mapM eval xps
+        let ex = find isException args
+        case ex of 
+            Just e  -> return e
+            Nothing -> return $ ListV $ args
+    LambdaL n xp -> return $ FuncV n xp (M.union (getArgs state) (getClosures state))
+    RecordL xps     -> do
+        let ks = (\(x, y) -> x) <$> xps
+        vs <- mapM (\(x, y) -> eval y) xps
+        let args = zip ks vs
+        let ex = find (isException . snd) args
+        case ex of
+            Just e -> return $ snd e
+            Nothing -> return $ RecordV args              
 
 isException :: RTValue -> Bool
 isException (ExceptionV _ _ _) = True
@@ -303,7 +335,8 @@ evalF :: EvalVar -> RTValue -> RTState -> RTValue
 evalF eV x state = case rtVAsMStr x of
     Just s -> case parseEval [] s of
         Left e -> ExceptionV "Parse" (show e) (getStackTrace state)
-        Right ex -> eval ex state
+--TODO:             -------
+        Right ex -> evalfst' ex state
     Nothing -> ExceptionV "Type" ("Can only evaluate Strings. '" ++ show x ++ "' is not a String") (getStackTrace state)
 
 

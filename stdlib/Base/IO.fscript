@@ -11,7 +11,7 @@ mapM_ f l = doAll (map f l);
 
 printAll = mapM_ print;
 
-putAll = mapM_ put;
+putAll = mapM_ putLn;
 
 getLine = fclass isString \s -> do
   | put s
