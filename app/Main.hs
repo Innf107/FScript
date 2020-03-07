@@ -241,10 +241,10 @@ eval (FCall fx ax)                    = get >>= \state -> do
             case fst $ runState (eval fx) state' of
                 (FuncV pn ex cls)   -> traceIf dEBUG "FCall" $ do 
                     put (updateClosures (M.union cls) $ updateArgs (const (Eager <$> M.singleton pn av)) state')
-                    x <- eval ex 
+                    x <- eval ex
                     return x
                 (NativeF f cls)     -> return $ traceIf dEBUG "FCall NativeF" $ f av (updateClosures (M.union cls) state')
-                (FClass n xs cls)   -> return $ traceIf dEBUG "FCall FClass" $ evalFC (FClass n xs cls) cls state' state' av
+                (FClass n xs cls)   -> return $ traceIf dEBUG "FCall FClass" $ evalFC (FClass n xs cls) cls state' av state'
                 ExceptionV et em st -> return $ traceIf dEBUG "Exception" $ ExceptionV et em st
                 x                   -> return $ ExceptionV "Type" ("Tried to call a value that is not a function! The value was '" ++ show x ++ "'") (getStackTrace state)
     where
@@ -253,20 +253,20 @@ eval (FCall fx ax)                    = get >>= \state -> do
         toFunName (If _ _ _) = "[If]"
         toFunName (FCall fe _) = "[FCall(" ++ (toFunName fe) ++ ")]"
         toFunName _ = "[Function]"
-        evalFC :: RTValue -> [Variable] -> RTState -> RTState -> RTValue -> RTValue
-        evalFC (FClass _ [] _) icls istate state av = traceIf dEBUG "FCall FClass []" $ ExceptionV "NonExhaustiveFClass" ("FClass cases are not exhaustive!") (getStackTrace state)
+        evalFC :: RTValue -> [Variable] -> RTState -> RTValue -> RTState -> RTValue
+        evalFC (FClass _ [] _) icls istate av state = traceIf dEBUG "FCall FClass []" $ ExceptionV "NonExhaustiveFClass" ("FClass cases are not exhaustive!") (getStackTrace state)
         --TODO:                                                                       -----
-        evalFC (FClass 0 ((FClassInstance _ fe):fcs) []) icls istate state av = case evalfst' (FCall fe (Value $ Eager av)) state
+        evalFC (FClass 0 ((FClassInstance _ fe):fcs) []) icls istate av state = case evalfst' (FCall fe (Value $ Eager av)) state
             of
-            (ExceptionV "FClass" _ _) -> evalFC (FClass 0 fcs icls) icls istate istate av
+            (ExceptionV "FClass" _ _) -> evalFC (FClass 0 fcs icls) icls istate av istate
             x -> x
 
-        evalFC (FClass 0 ((FClassInstance p fe):fcs) cls) icls istate state av = traceIf dEBUG "FCall FClass" $
+        evalFC (FClass 0 ((FClassInstance p fe):fcs) cls) icls istate av state = traceIf dEBUG "FCall FClass" $
         --TODO:  -------
             case evalfst' fe state of
-                (FuncV pn ex fcls) -> let (a:as) = cls in evalFC (FClass 0 ((FClassInstance p (FCall fe (Value a))):fcs) as) icls istate (updateClosures (M.insert pn a) state) av
+                (FuncV pn ex fcls) -> let (a:as) = cls in evalFC (FClass 0 ((FClassInstance p (FCall fe (Value a))):fcs) as) icls istate av (updateClosures (M.insert pn a) state)
 
-        evalFC (FClass n fcs cls) icls istate state av = (FClass (n - 1) fcs (Eager av:cls))
+        evalFC (FClass n fcs cls) icls istate av state = (FClass (n - 1) fcs (Eager av:cls))
 
 
 eval (Let (NormalDef n vx) ex) = do
