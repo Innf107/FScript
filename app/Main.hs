@@ -240,8 +240,8 @@ eval (FCall fx ax)                    = get >>= \state -> do
         _ -> let state' = updateStackTrace ((toFunName fx):) state in
             case fst $ runState (eval fx) state' of
                 (FuncV pn ex cls)   -> traceIf dEBUG "FCall" $ do 
-                    x <- eval ex 
                     put (updateClosures (M.union cls) $ updateArgs (const (Eager <$> M.singleton pn av)) state')
+                    x <- eval ex 
                     return x
                 (NativeF f cls)     -> return $ traceIf dEBUG "FCall NativeF" $ f av (updateClosures (M.union cls) state')
                 (FClass n xs cls)   -> return $ traceIf dEBUG "FCall FClass" $ evalFC (FClass n xs cls) cls state' state' av
