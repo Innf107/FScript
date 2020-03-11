@@ -2,6 +2,7 @@ import stdlib/Base/List;
 import stdlib/Base/IO;
 import stdlib/Base/Math;
 import stdlib/Base/Record;
+import stdlib/Base/Compose;
 
 -- General
 id x = x;
