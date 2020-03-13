@@ -144,13 +144,27 @@ defDestS ops = do
     return $ DefDest (Destr name v ds)
 
 defFClassS :: [Op] -> Parser Statement
-defFClassS ops = do
-    name <- identifier <|> parens operator
-    arity <- fromInteger <$> natural
-    prec <- fromInteger <$> natural
-    symbol "+="
-    e <- expr ops
-    return $ DefFClass name arity $ FClassInstance prec e
+defFClassS ops = try defFClassE <|> defFClassI
+    where
+        defFClassE = do
+            name <- identifier <|> parens operator
+            arity <- ((+ (-1)) . fromInteger) <$> natural
+            prec <- fromInteger <$> natural
+            symbol "+="
+            e <- expr ops
+            return $ DefFClass name arity $ FClassInstance prec e
+        defFClassI = do
+            name <- identifier <|> parens operator
+            prec <- fromInteger <$> natural
+            ps <- many (identifier <|> parens operator)
+            symbol "+="
+            e <- (expr ops)
+            return $ DefFClass name (length ps - 1) $ genF ps e prec
+        genF :: [String] -> Expr -> Int -> FClassInstance
+        genF []     e pr = FClassInstance pr e
+        genF (p:ps) e pr = genF ps (Literal $ LambdaL p e) pr
+
+
 
 runS :: [Op] -> Parser Statement
 runS ops = Run <$> (expr ops)
