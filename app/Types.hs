@@ -66,7 +66,9 @@ type EvalVar = (Variable -> RTState -> RTValue)
 data RTState = RTState {getVals::M.Map String Variable, getArgs::M.Map String Variable,
                         getClosures::M.Map String Variable, getDests::[Destr],
                         getFClasses::M.Map String FClassObj,
-                        getStackTrace::[String]}
+                        getStackTrace::[String],
+                        getEvaledVals::M.Map String RTValue, getEvaledArgs::M.Map String RTValue,
+                        getEvaledCls::M.Map String RTValue}
                         deriving (Show, Eq, Read)
 
 data FClassObj = FClassObj Int [FClassInstance] [Variable] deriving (Show, Eq, Read)

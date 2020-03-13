@@ -49,9 +49,8 @@ updateStackTrace :: ([String] -> [String]) -> RTState -> RTState
 updateStackTrace f state = state {getStackTrace=f $ getStackTrace state}
 
 insertFClass :: String -> Int -> FClassInstance -> RTState -> RTState
-insertFClass name arity fc state = RTState {getVals=getVals state, getArgs=getArgs state, getClosures=getClosures state,
-                                 getDests=getDests state, getFClasses=
-                                 M.insertWith ins name (FClassObj arity [fc] []) (getFClasses state), getStackTrace=getStackTrace state}
+insertFClass name arity fc state = state {getFClasses=
+                                 M.insertWith ins name (FClassObj arity [fc] []) (getFClasses state)}
     where
         ins :: FClassObj -> FClassObj -> FClassObj
         ins (FClassObj a fs cls) (FClassObj _ fs' _) = (FClassObj a (ins' fs fs') cls)
@@ -59,7 +58,8 @@ insertFClass name arity fc state = RTState {getVals=getVals state, getArgs=getAr
 
 emptyState :: RTState
 emptyState = RTState {getVals=Eager <$> M.fromList (nativeFs ++ nativeVals), getArgs=M.empty, getClosures=M.empty,
-                      getDests=[], getFClasses=M.empty, getStackTrace=[]}
+                      getDests=[], getFClasses=M.empty, getStackTrace=[], getEvaledVals=M.empty, getEvaledArgs=M.empty, 
+                      getEvaledCls=M.empty}
 
 
 nativeFs :: [(String, RTValue)]
