@@ -57,7 +57,7 @@ data RTValue = NumV Double
              | FClass Int [FClassInstance] [Variable]
              | NullV
              | RecordV [(String, RTValue)]
-             | ExceptionV String String [String]
+             | ExceptionV String String RTValue [String]
              deriving (Show, Eq, Read)
 
 type EvalVar = (Variable -> RTState -> RTValue)

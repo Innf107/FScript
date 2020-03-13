@@ -68,9 +68,9 @@ nativeFs = (\(x, y) -> (x, NativeF (y evalVar) M.empty)) <$> [("put", putF), ("d
     ("round", roundF), ("showNum", showNumF), ("entries", entriesF), ("debugState", debugStateF), ("toCode", toCodeF)]
 
 nativeVals :: [(String, RTValue)]
-nativeVals = (second (\f -> f evalVar)) <$> [("addNum", addNumF), ("subNum", subNumF), ("ord", ordF), ("mulNum", mulNumF), ("divNum", divNumF), ("cons", consF),
-              ("get", getF), ("set", setF), ("compIO", compIOF), ("readLine", readLineF), ("throw", throwF),
-              ("rem", remF)]
+nativeVals = (second (\f -> f evalVar)) <$> [("addNum", addNumF), ("subNum", subNumF), ("ord", ordF), ("mulNum", mulNumF),
+              ("divNum", divNumF), ("cons", consF), ("get", getF), ("set", setF), ("compIO", compIOF), ("readLine", readLineF),
+              ("throw", throwF), ("error", errorF), ("rem", remF)]
 
 main :: IO ()
 main = do
@@ -152,7 +152,7 @@ runStatement (DefDest dest)         state _ = return $ (updateDests (dest:) stat
 runStatement (DefFClass name arity fc) state _ = return $ (insertFClass name arity fc state, False)
 runStatement (Run e)                state _ = let (x, state') = runState (eval e) state in case x of
     (IOV a)                         -> runIOAction a state' >> return (state', False)
-    (ExceptionV eType eMsg st)      -> (putStrLn $ eType  ++ " Exception: '" ++ eMsg ++ "'" ++ "\n\nStackTrace: " ++ showST st) >> return (state', True)
+    (ExceptionV eType eMsg ed st)      -> (putStrLn $ eType  ++ " Exception: '" ++ eMsg ++ "'\nData: '" ++ fromMaybe "UNKNOWN TYPE" (rtVAsMStr $ evalfst' (FCall (Var "show") (Value (Eager ed))) state) ++ "'\n\nStackTrace: " ++ showST st) >> return (state', True)
     _                               -> putStrLn "Can only run values of type IO!" >> return (state', True)
 
 
@@ -237,7 +237,7 @@ eval (Value val)                      = case val of
 eval (FCall fx ax)                    = get >>= \state -> do
     av <- eval ax
     case av of
-        ExceptionV eType eMsg st -> return $ ExceptionV eType eMsg st
+        ExceptionV eType eMsg ed st -> return $ ExceptionV eType eMsg ed st
         _ -> do
             let state' = updateStackTrace ((toFunName fx):) state
 --TODO:     Maybe unneccessary?
@@ -252,8 +252,8 @@ eval (FCall fx ax)                    = get >>= \state -> do
                 (FClass n xs cls)   -> do
 --TODO:          Maybe unneccessary
                     evalFC (FClass n xs cls) cls state' av
-                ExceptionV et em st -> return $ ExceptionV et em st
-                x                   -> return $ ExceptionV "Type" ("Tried to call a value that is not a function! The value was '" ++ show x ++ "'") (getStackTrace state)
+                ExceptionV et em ed st -> return $ ExceptionV et em ed st
+                x                   -> return $ ExceptionV "Type" ("Tried to call a value that is not a function! The value was '" ++ show x ++ "'") NullV (getStackTrace state)
     where
         toFunName (Var n) = n
         toFunName (Literal (LambdaL _ _)) = "[Lambda]"
@@ -261,12 +261,12 @@ eval (FCall fx ax)                    = get >>= \state -> do
         toFunName (FCall fe _) = "[FCall(" ++ (toFunName fe) ++ ")]"
         toFunName _ = "[Function]"
         evalFC :: RTValue -> [Variable] -> RTState -> RTValue -> State RTState RTValue
-        evalFC (FClass _ [] _) icls istate av = get >>= \state -> return $ ExceptionV "NonExhaustiveFClass" ("FClass cases are not exhaustive!") (getStackTrace state)
+        evalFC (FClass _ [] _) icls istate av = get >>= \state -> return $ ExceptionV "NonExhaustiveFClass" ("FClass cases are not exhaustive!") NullV (getStackTrace state)
         evalFC (FClass 0 ((FClassInstance _ fe):fcs) []) icls istate av = do
             state <- get
             x <- eval (FCall fe (Value $ Eager av))
             case x of
-                (ExceptionV "FClass" _ _) -> do
+                (ExceptionV "FClass" _ _ _) -> do
 --TODO:             Maybe unneccessary?
                     put istate
                     evalFC (FClass 0 fcs icls) icls istate av
@@ -295,7 +295,7 @@ eval (Let (NormalDef n vx) ex) = do
         return x
 
 eval (Let (DestDef dn ns e) ex) = get >>= \state -> case find (\(Destr dn' _ _) -> dn == dn') (getDests state) of
-    Nothing -> return $ ExceptionV "State" ("Destructuring " ++ dn ++ " does not exist!") (getStackTrace state)
+    Nothing -> return $ ExceptionV "State" ("Destructuring " ++ dn ++ " does not exist!") NullV (getStackTrace state)
     Just (Destr _ v exps) -> do
         put (updateArgs (insertAll ((\(n, ne) -> (n, Lazy (dest2Eval v e ne state))) <$> (zip ns exps))) state)
         x <- eval ex
@@ -313,17 +313,17 @@ eval (Var n) = get >>= \state -> case M.lookup n (getArgs state) <|> M.lookup n 
                                 Eager x -> return x
                             Nothing -> return $ ExceptionV "State" ("Value " ++ n ++ " does not exist in the current state! \n\nCurrent Args were: " ++
                                 show (getArgs state) ++ "\n\nClosures were: "
-                                ++ show (getClosures state) ++ "\n\nVals were:" ++ show (M.keys (getVals state))) (getStackTrace state)
+                                ++ show (getClosures state) ++ "\n\nVals were:" ++ show (M.keys (getVals state))) NullV (getStackTrace state)
 
 eval (If c th el)               = get >>= \state -> do
     c' <- eval c 
     case (c') of
-        BoolV False      -> eval el
-        NumV 0           -> eval el
-        NullV            -> eval el
-        ListV []         -> eval el
-        RecordV []       -> eval el
-        ExceptionV t m s -> return $ ExceptionV t m s
+        BoolV False        -> eval el
+        NumV 0             -> eval el
+        NullV              -> eval el
+        ListV []           -> eval el
+        RecordV []         -> eval el
+        ExceptionV t m d s -> return $ ExceptionV t m d s
         _                -> eval th
 
 eval (Literal l)                = get >>= \state -> case l of
@@ -348,16 +348,16 @@ eval (Literal l)                = get >>= \state -> case l of
             Nothing -> return $ RecordV args              
 
 isException :: RTValue -> Bool
-isException (ExceptionV _ _ _) = True
+isException (ExceptionV _ _ _ _) = True
 isException _ = False
 
 evalF :: EvalVar -> RTValue -> RTState -> RTValue
 evalF eV x state = case rtVAsMStr x of
     Just s -> case parseEval [] s of
-        Left e -> ExceptionV "Parse" (show e) (getStackTrace state)
+        Left e -> ExceptionV "Parse" (show e) NullV (getStackTrace state)
 --TODO:             -------
         Right ex -> evalfst' ex state
-    Nothing -> ExceptionV "Type" ("Can only evaluate Strings. '" ++ show x ++ "' is not a String") (getStackTrace state)
+    Nothing -> ExceptionV "Type" ("Can only evaluate Strings. '" ++ show x ++ "' is not a String") NullV (getStackTrace state)
 
 
 showST :: [String] -> String

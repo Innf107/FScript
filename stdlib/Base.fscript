@@ -52,7 +52,7 @@ tclass tl f = if (tl && (isString tl))
         then let (HT t ts) = tl in
             \y -> if (y `is` t)
                 then tclass ts (f y)
-                else throw "FClass" ("Not Type " + t)
+                else throw "FClass" ("Not Type " + t) y
         else f;
 
 fclass = \pl -> \f -> if (pl `is` "Function")
@@ -61,7 +61,7 @@ fclass = \pl -> \f -> if (pl `is` "Function")
         then let (HT p ps) = pl in
             \y -> if (p y)
                 then fclass ps (f y)
-                else throw "FClass" ("Does not match the predicate" + t)
+                else throw "FClass" ("Does not match the predicate" + t) y
         else f;
 
 

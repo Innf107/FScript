@@ -3,7 +3,7 @@ assert = assertInner True;
 assertInner = tclass ["Bool", "String", "ANY", "String"] \printA name value action -> let f = get action assertions in
     if f
         then f printA name value
-        else throw "Argument" $ "Assertion Type " + action + " does not exist!";
+        else throw "Argument" $ "Assertion Type does not exist!" action;
 
 assertBool = tclass ["String", "Bool", "String", "Bool"] \name b emsg printA -> if printA
     then if b

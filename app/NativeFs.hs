@@ -7,6 +7,13 @@ import Data.List
 import qualified Data.Map as M
 import Data.Bifunctor
 import GHC.IO.FD (stdin)
+import Data.Function ((&))
+
+throwRT :: String -> String -> RTState -> RTValue
+throwRT t m state = ExceptionV t m NullV (getStackTrace state)
+
+throwDRT :: String -> String -> RTValue -> RTState -> RTValue
+throwDRT t m d state = ExceptionV t m d (getStackTrace state)
 
 compIOF :: EvalVar -> RTValue
 compIOF eV = FuncV "io" (Value $ Eager $ NativeF compInner M.empty) M.empty
@@ -14,14 +21,14 @@ compIOF eV = FuncV "io" (Value $ Eager $ NativeF compInner M.empty) M.empty
         compInner :: RTValue -> RTState -> RTValue
         compInner f state = case io of
             IOV a -> IOV $ Composed a f
-            x -> ExceptionV "Type" ("compIO needs its first argument to be an IO action. '" ++ show x ++ "' is not an IO action!") (getStackTrace state)
+            x -> throwDRT "Type" "compIO needs its first argument to be an IO action. '" x state
             where
                 io = fromMaybe (NumV $ -999) $ (`eV` state) <$> M.lookup "io" (getClosures state)
 
 sysF :: EvalVar -> RTValue -> RTState -> RTValue
 sysF eV v state = case (rtVAsMStr v) of
     Just s  -> IOV (CallCommand s)
-    Nothing -> ExceptionV "Type" "sys needs its argument to be a String!" (getStackTrace state)
+    Nothing -> throwDRT "Type" "sys needs its argument to be a String!" v state
     
 
 readLineF :: EvalVar -> RTValue
@@ -31,12 +38,23 @@ readLineF eV = IOV ReadLine
 --getStdInF = stdin
 
 throwF :: EvalVar -> RTValue
-throwF eV = FuncV "type" (Value $ Eager $ NativeF throwInner M.empty) M.empty
+throwF eV = FuncV "type" (Literal $ LambdaL "msg" (Value $ Eager $ NativeF throwInner M.empty)) M.empty
     where
         throwInner :: RTValue -> RTState -> RTValue
-        throwInner name state = ExceptionV (rtVAsMStr typen |> fromMaybe "Unknown") (rtVAsMStr name |> fromMaybe "Unknown") (getStackTrace state)
+        throwInner data' state = throwDRT (rtVAsMStr typen & fromMaybe "Unknown") (rtVAsMStr msg & fromMaybe "Unknown") data' state
             where
                 typen = fromMaybe (NumV $ -999) $ (`eV` state) <$> M.lookup "type" (getClosures state)
+                msg = fromMaybe (NumV $ -999) $ (`eV` state) <$> M.lookup "msg" (getClosures state)
+
+
+errorF :: EvalVar -> RTValue
+errorF eV = FuncV "type" (Value $ Eager $ NativeF throwInner M.empty) M.empty
+    where
+        throwInner :: RTValue -> RTState -> RTValue
+        throwInner msg state = throwDRT (rtVAsMStr typen |> fromMaybe "Unknown") (rtVAsMStr msg |> fromMaybe "Unknown") NullV state
+            where
+                typen = fromMaybe (NumV $ -999) $ (`eV` state) <$> M.lookup "type" (getClosures state)
+
 
 remF :: EvalVar -> RTValue
 remF eV = FuncV "x" (Value $ Eager $ NativeF remInner M.empty) M.empty
@@ -44,17 +62,17 @@ remF eV = FuncV "x" (Value $ Eager $ NativeF remInner M.empty) M.empty
         remInner :: RTValue -> RTState -> RTValue
         remInner y state = case (x, y) of
             (NumV a, NumV b) -> NumV $ fromIntegral (rem (round a) (round b))
-            (x, y) -> ExceptionV "Type" ("Rem needs both arguments to be Numbers! '"  ++ show x ++ "' and '" ++ show y ++ "' are not numbers!") (getStackTrace state)
+            (x, y) -> throwRT "Type" ("Rem needs both arguments to be Numbers! '"  ++ show x ++ "' and '" ++ show y ++ "' are not numbers!") state
             where
                x = fromMaybe (NumV $ -999) $ (`eV` state) <$> M.lookup "x" (getClosures state)
 
 showNumF :: EvalVar -> RTValue -> RTState -> RTValue
 showNumF eV (NumV x) state = strAsRTV $ show x
-showNumF eV _        state = ExceptionV "Type" "Not a Number" (getStackTrace state)
+showNumF eV _        state = throwRT "Type" "Not a Number" state
 
 putF :: EvalVar -> RTValue -> RTState -> RTValue
 putF eV (ListV vs) state = IOV $ Print $ rtVAsStr (ListV vs)
-putF eV _ state = ExceptionV "Type" ("'put' only works with strings. Use 'print' if you want to print other types") (getStackTrace state)
+putF eV _ state = throwRT "Type" ("'put' only works with strings. Use 'print' if you want to print other types") state
 
 rtVAsStr :: RTValue -> String
 rtVAsStr (ListV vs) = map rtVAsChar vs
@@ -81,7 +99,7 @@ addNumF eV = FuncV "x" (Value $ Eager $ NativeF addFInner M.empty) M.empty
         addFInner :: RTValue -> RTState -> RTValue
         addFInner y state = case (x, y) of
             (NumV a,  NumV b)   -> (NumV $ a + b)
-            (x, y)              -> ExceptionV "Type" ("addNum takes two Nums not '" ++ show x ++ "' and '" ++ show y ++ "'") (getStackTrace state)
+            (x, y)              -> throwRT "Type" ("addNum takes two Nums not '" ++ show x ++ "' and '" ++ show y ++ "'") state
             where
                 x = fromMaybe (NumV $ -999) $ (`eV` state) <$>  M.lookup "x" (getClosures state)
 
@@ -91,7 +109,7 @@ subNumF eV = FuncV "x" (Value $ Eager $ NativeF subFInner M.empty) M.empty
         subFInner :: RTValue -> RTState -> RTValue
         subFInner y state = case (x, y) of
             (NumV a,  NumV b)   -> (NumV $ a - b)
-            (x, y)              -> ExceptionV "Type" ("Cannot subtract the expressions '" ++ show x ++ "' and '" ++ show y ++ "'") (getStackTrace state)
+            (x, y)              -> throwRT "Type" ("Cannot subtract the expressions '" ++ show x ++ "' and '" ++ show y ++ "'") state
             where
                 x = fromMaybe (NumV $ -999) $ (`eV` state) <$> M.lookup "x" (getClosures state)
 
@@ -112,8 +130,8 @@ ordF eV = FuncV "x" (Value $ Eager $ NativeF ordFInner M.empty) M.empty
             (NullV, NullV)       -> NumV 0
             (NullV, _)           -> NumV $ -1
             (_, NullV)           -> NumV 1
-            (x, y)               -> ExceptionV "Type" ("cannot compare the values '" ++ show x ++ "' and '" ++ show y ++
-                "' because they are different types and neither of then is 'Null'") (getStackTrace state)
+            (x, y)               -> throwRT "Type" ("cannot compare the values '" ++ show x ++ "' and '" ++ show y ++
+                "' because they are different types and neither of then is 'Null'") state
             where
                 x = fromMaybe (NumV $ -999) $ (`eV` state) <$> M.lookup "x" (getClosures state)
 
@@ -128,7 +146,7 @@ mulNumF eV = FuncV "x" (Value $ Eager $ NativeF mulFInner M.empty) M.empty
         mulFInner :: RTValue -> RTState -> RTValue
         mulFInner y state = case (x, y) of
             (NumV a,  NumV b)   -> (NumV $ a * b)
-            (x, y)              -> ExceptionV "Type" ("Cannot multiply the expressions '" ++ show x ++ "' and '" ++ show y ++ "'") (getStackTrace state)
+            (x, y)              -> throwRT "Type" ("Cannot multiply the expressions '" ++ show x ++ "' and '" ++ show y ++ "'") state
             where
                 x = fromMaybe (NumV $ -999) $ (`eV` state) <$> M.lookup "x" (getClosures state)
 
@@ -138,7 +156,7 @@ divNumF eV = FuncV "x" (Value $ Eager $ NativeF divFInner M.empty) M.empty
         divFInner :: RTValue -> RTState -> RTValue
         divFInner y state = case (x, y) of
             (NumV a,  NumV b)   -> (NumV $ a / b)
-            (x, y)              -> ExceptionV "Type" ("Cannot divide the expressions '" ++ show x ++ "' and '" ++ show y ++ "'") (getStackTrace state)
+            (x, y)              -> throwRT "Type" ("Cannot divide the expressions '" ++ show x ++ "' and '" ++ show y ++ "'") state
             where
                 x = fromMaybe (NumV $ -999) $ (`eV` state) <$> M.lookup "x" (getClosures state)
 
@@ -155,26 +173,26 @@ headF :: EvalVar -> RTValue -> RTState -> RTValue
 headF eV x state = case x of
     ListV []    -> NullV
     ListV (x:_) -> x
-    x           -> ExceptionV "Type" ("'head' needs its argument to be a list. '" ++ show x ++ "' is not a List!") (getStackTrace state)
+    x           -> throwRT "Type" ("'head' needs its argument to be a list. '" ++ show x ++ "' is not a List!") state
 
 tailF :: EvalVar -> RTValue -> RTState -> RTValue
 tailF eV x state = case x of
     ListV []     -> NullV
     ListV (_:xs) -> ListV xs
-    x            -> ExceptionV "Type" ("'tail' needs its argument to be a list. '" ++ show x ++ "' is not a List!") (getStackTrace state)
+    x            -> throwRT "Type" ("'tail' needs its argument to be a list. '" ++ show x ++ "' is not a List!") state
 
 typeofF :: EvalVar -> RTValue -> RTState -> RTValue
-typeofF eV (IOV _)            state = strAsRTV "IO"
-typeofF eV (CharV _)          state = strAsRTV "Char"
-typeofF eV (ListV _)          state = strAsRTV "List"
-typeofF eV (NumV _)           state = strAsRTV "Num"
-typeofF eV (BoolV _)          state = strAsRTV "Bool"
-typeofF eV (FuncV _ _ _)      state = strAsRTV "Function"
-typeofF eV (NativeF _ _)    state = strAsRTV "Function"
-typeofF eV (FClass _ _ _)     state = strAsRTV "Function"
-typeofF eV (NullV)            state = strAsRTV "Null"
-typeofF eV (RecordV _)        state = strAsRTV "Record"
-typeofF eV (ExceptionV _ _ _) state = strAsRTV "Exception"
+typeofF eV (IOV _)              state = strAsRTV "IO"
+typeofF eV (CharV _)            state = strAsRTV "Char"
+typeofF eV (ListV _)            state = strAsRTV "List"
+typeofF eV (NumV _)             state = strAsRTV "Num"
+typeofF eV (BoolV _)            state = strAsRTV "Bool"
+typeofF eV (FuncV _ _ _)        state = strAsRTV "Function"
+typeofF eV (NativeF _ _)        state = strAsRTV "Function"
+typeofF eV (FClass _ _ _)       state = strAsRTV "Function"
+typeofF eV (NullV)              state = strAsRTV "Null"
+typeofF eV (RecordV _)          state = strAsRTV "Record"
+typeofF eV (ExceptionV _ _ _ _) state = strAsRTV "Exception"
 
 consF :: EvalVar -> RTValue
 consF eV = FuncV "x" (Value $ Eager $ NativeF consInner M.empty) M.empty
@@ -182,7 +200,7 @@ consF eV = FuncV "x" (Value $ Eager $ NativeF consInner M.empty) M.empty
         consInner :: RTValue -> RTState -> RTValue
         consInner xs state = case xs of
             ListV l -> ListV (x:l)
-            x       -> ExceptionV "Type" ("cons needs its second argument to be of type List. The value '" ++ show x ++ "' is not a List!") (getStackTrace state)
+            x       -> throwRT "Type" ("cons needs its second argument to be of type List. The value '" ++ show x ++ "' is not a List!") state
             where
                 x = fromMaybe (NumV $ -999) $ (`eV` state) <$> M.lookup "x" (getClosures state)
 
@@ -193,9 +211,9 @@ getF eV = FuncV "n" (Value $ Eager $ NativeF getInner M.empty) M.empty
         getInner :: RTValue -> RTState -> RTValue
         getInner ms state = case ms of
             RecordV m -> case rtVAsMStr n of
-                Nothing -> ExceptionV "Type" ("get needs its first argument to be of type String. The value '" ++ show n ++ "' is not a String!") (getStackTrace state)
+                Nothing -> throwRT "Type" ("get needs its first argument to be of type String. The value '" ++ show n ++ "' is not a String!") state
                 Just s  -> fromMaybe NullV $ lookup s m
-            x -> ExceptionV "Type" ("get needs its second argument to be of type Map. The value '" ++ show x ++ "' is not a Map!") (getStackTrace state)
+            x -> throwRT "Type" ("get needs its second argument to be of type Map. The value '" ++ show x ++ "' is not a Map!") state
             where
                 n = fromMaybe (NumV $ -999) $ (`eV` state) <$> M.lookup "n" (getClosures state)
 
@@ -205,9 +223,9 @@ setF eV = FuncV "n" (Literal (LambdaL "x" (Value $ Eager $ NativeF setInner M.em
         setInner :: RTValue -> RTState -> RTValue
         setInner ms state = case ms of
             RecordV m -> case rtVAsMStr n of
-                Nothing -> ExceptionV "Type" ("set needs its first argument to be of type String. The value '" ++ show n ++ "' is not a String!") (getStackTrace state)
+                Nothing -> throwRT "Type" ("set needs its first argument to be of type String. The value '" ++ show n ++ "' is not a String!") state
                 Just s  -> RecordV $ setAL s x m
-            x -> ExceptionV "Type" ("set needs its second argument to be of type Map. The value '" ++ show x ++ "' is not a Map!") (getStackTrace state)
+            x -> throwRT "Type" ("set needs its second argument to be of type Map. The value '" ++ show x ++ "' is not a Map!") state
             where
                 n = fromMaybe (NumV $ -999) $ (`eV` state) <$> M.lookup "n" (getClosures state)
                 x = fromMaybe (NumV $ -777) $ (`eV` state) <$> M.lookup "x" (getClosures state)
@@ -218,12 +236,12 @@ pureIOF eV x state = IOV $ PureIO x
 
 roundF :: EvalVar -> RTValue -> RTState -> RTValue
 roundF eV (NumV n) state = NumV $ fromIntegral $ round n
-roundF eV x state        = ExceptionV "Type" ("round needs its first argument to be of type Number. The value '" ++ show x ++ "' is not a Number.") (getStackTrace state)
+roundF eV x state        = throwRT "Type" ("round needs its first argument to be of type Number. The value '" ++ show x ++ "' is not a Number.") state
 
 
 entriesF :: EvalVar -> RTValue -> RTState -> RTValue
 entriesF eV (RecordV es) state = ListV ((\(x, y) -> ListV [strAsRTV x, y]) <$> es)
-entriesF eV _ state            = ExceptionV "Type" ("Not a Record") (getStackTrace state)
+entriesF eV _ state            = throwRT "Type" ("Not a Record") state
 
 toCodeF :: EvalVar -> RTValue -> RTState -> RTValue
 toCodeF eV v state = strAsRTV "NYI"--(toCode v)
