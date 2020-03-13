@@ -2,6 +2,8 @@ import stdlib/Base/List;
 import stdlib/Base/IO;
 import stdlib/Base/Math;
 import stdlib/Base/Record;
+import stdlib/Base/Maybe;
+import stdlib/Base/Either;
 
 -- General
 id x = x;
@@ -95,3 +97,7 @@ showPInner 1 0 += \x -> const (show x);
 (*) 2 20 += tclass ["Num", "Num"] mulNum;
 
 (/) 2 20 += tclass ["Num", "Num"] divNum;
+
+until = tclass ["Function", "Function", "ANY"] \p f x ->
+    if p x then x
+    else until p f (f x);

@@ -282,6 +282,11 @@ eval (FCall fx ax)                    = get >>= \state -> do
                     x <- evalFC (FClass 0 ((FClassInstance p (FCall fe (Value a))):fcs) as) icls istate av
                     put state
                     return x
+                (ExceptionV t m d st) -> return $ ExceptionV t m d st
+                x -> error $ "Some other functiontype (" ++ show x ++ ")"
+                --(NativeF f fcls) -> do
+                --    let (a:as) = cls
+                --    state <- get
 --TODO:         More than FuncV?
         evalFC (FClass n fcs cls) icls istate av = return (FClass (n - 1) fcs (Eager av:cls))
 

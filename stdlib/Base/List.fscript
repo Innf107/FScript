@@ -29,22 +29,28 @@ rangeI s e = range s (e + 1);
 (::+) = rangeI;
 
 
-repeat x i = if (i <= 0)
+replicate x i = if (i <= 0)
     then []
-    else (x : (repeat x (i - 1)));
+    else (x : (replicate x (i - 1)));
 
 <<HT l>> head l @ tail l;
-<<HT2 l>> head l @ getAt 1 l @ tail l;
-<<HT3 l>> head l @ getAt 1 l @ getAt 2 l @ tail l;
-<<HT4 l>> head l @ getAt 1 l @ getAt 2 l @ getAt 3 l @ tail l;
-<<HT5 l>> head l @ getAt 1 l @ getAt 2 l @ getAt 3 l @ getAt 4 l @ tail l;
+<<HT2 l>> head l @ getAt 1 l @ drop 2 l;
+<<HT3 l>> head l @ getAt 1 l @ getAt 2 l @ drop 3 l;
+<<HT4 l>> head l @ getAt 1 l @ getAt 2 l @ getAt 3 l @ drop 4 l;
+<<HT5 l>> head l @ getAt 1 l @ getAt 2 l @ getAt 3 l @ getAt 4 l @ drop 5 l;
 
 <<T l>> head l @ getAt 1 l @ getAt 2 l @ getAt 3 l @ getAt 4 l @ getAt 5 l @ getAt 6 l @ getAt 7 l;
 
-padStart x i l = ((repeat x (i - (length l))) + l);
+padStart x i l = ((replicate x (i - (length l))) + l);
 
 take i l = if ((toBool l) && (i > 0))
     then let (HT x xs) = l in (x : (take (i - 1) xs))
+    else [];
+
+drop 2 20 += tclass ["Num", "List"] \n l -> if l
+    then let (HT x xs) = l in if n <= 0
+        then x:xs
+        else drop (n - 1) xs
     else [];
 
 skipLast i l = take ((length l) - i) l;
@@ -123,8 +129,41 @@ map 2 20 += tclass ["Function", "List"] \f l ->
 
 (-) 2 10 += tclass "List" (flip delete);
 
-(-) 2 20 += tclass ["List", "List"] \xs ys -> foldl (\a -> \c -> delete c a) xs ys;
+(-) 2 20 += tclass ["List", "List"] \xs ys -> foldl (flip delete) xs ys;
 
-(*) 2 20 += tclass ["List", "Num"] \l n -> flatMap id (repeat l n);
+(*) 2 20 += tclass ["List", "Num"] \l n -> flatMap id (replicate l n);
 
 x !! ys = getAt x ys;
+
+break 2 20 += tclass ["Function", "List"] \f l -> if l
+    then let (HT x xs) = l in if f x
+        then [[], x:xs]
+        else let (T pass fail) = break f xs in [x:pass, fail]
+    else [[], []];
+
+partition 2 20 += tclass ["Function", "List"] \f l -> if l
+    then let (HT x xs) = l in let (T pass fail) = partition f xs in if f x
+        then [x:pass, fail]
+        else [pass, x:fail]
+    else [[], []];
+
+last 1 20 += tclass "List" \l -> if l
+    then let (HT x xs) = l in if xs
+        then last xs
+        else x
+    else error "Argument" "Last expects a finite non-empty list";
+
+init 1 20 += tclass "List" \l -> if l
+    then let (HT2 x y xs) = l in if xs
+        then x:(init (y:xs))
+        else [x]
+    else [];
+
+scanl 3 20 += tclass ["Function", "ANY", "List"] \f z l -> if l
+    then let (HT x xs) = l in [z:(scanl f z xs)]
+    else [x];
+
+
+
+-- Not quite lazy enough
+--iterate = tclass ["Function", "ANY"] \f x -> x:(iterate f (f x));
