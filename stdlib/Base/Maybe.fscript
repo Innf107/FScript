@@ -15,3 +15,6 @@ map 2 30 += tclass ["Function", "Maybe"] \f m -> if (get "Variant" m == "Just")
     then Just (f (get "val" m))
     else m;
 
+fromMaybe d m = if (get "Variant" m == "Just")
+    then get "val" m
+    else d;

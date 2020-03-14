@@ -14,11 +14,12 @@ Right x = {
 
 map 2 30 += mapRight;
 
-mapRight = tclass ["Function", "Either"] \f e -> bimap id f e;
+second 2 30 += tclass ["Function", "Either"] \f e -> bimap id f e;
 
-mapLeft  = tclass ["Function", "Either"] \f e -> bimap f id e;
+first 2 30 += tclass ["Function", "Either"] \f e -> bimap f id e;
 
 bimap 3 30 += tclass ["Function", "Function", "Either"] \f g e -> let v = get "Variant" e in
     if v == "Left" then f e
     else if v == "Right" then g e
     else e;
+

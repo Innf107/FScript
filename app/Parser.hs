@@ -88,19 +88,44 @@ statements :: [Op] -> Parser ([Statement], [Op])
 statements ops = whiteSpace >> ((do
     x <- statement ops
     case x of
-        (DefOpPrec op prec assoc) -> (statements ((Op op prec assoc):ops))
-        _ -> (first (x:) <$> statements ops)
+        [DefOpPrec op prec assoc] -> (statements ((Op op prec assoc):ops))
+        _ -> (first (x++) <$> statements ops)
     ) <|> return ([], ops))
 
-statement :: [Op] -> Parser Statement
+statement :: [Op] -> Parser [Statement]
 statement ops =
-    ((try defOpPrec
-    <|> try importS
-    <|> try (defOp ops)
-    <|> try (defS ops)
-    <|> try (defDestS ops)
-    <|> try (defFClassS ops)
-    <|> (runS ops)) <* symbol ";") <?> "statement"
+    ((try (pure <$> try defOpPrec)
+    <|> try (pure <$> importS)
+    <|> try (pure <$> (defOp ops))
+    <|> try (pure <$> (defS ops))
+    <|> try (pure <$> (defDestS ops))
+    <|> try (defADT ops)
+    <|> try (pure <$> (defFClassS ops))
+    <|> (pure <$> ((runS ops)))) <* symbol ";") <?> "statement"
+
+defADT :: [Op] -> Parser [Statement]
+defADT ops = do
+    tname <- identifier
+    symbol ":="
+    (adtConst tname) `sepBy1` (symbol "|") 
+    where
+        adtConst :: String -> Parser Statement
+        adtConst tname = do
+            --TODO: maybe first uppercase?
+            cname <- identifier
+            ps <- many adtParam
+            return $ constructADT tname cname ps
+        adtParam = do
+            n <- identifier
+            symbol ":"
+            t <- identifier
+            return (n, t)
+        constructADT :: String -> String -> [(String, String)] -> Statement
+        constructADT tname cname ps = Def $ NormalDef cname $ FCall (FCall (Var "tclass") (Literal $ ListL $ (strAsEx . snd) <$> ps)) $
+           constructADT' tname cname (fst <$> ps) (fst <$> ps)
+        constructADT' :: String -> String -> [String] -> [String] -> Expr
+        constructADT' tname cname [] ips = Literal $ RecordL $ [("Type", strAsEx tname), ("Variant", strAsEx cname)] ++ ((\n -> (n, Var n)) <$> ips)
+        constructADT' tname cname (p:ps) ips = Literal $ LambdaL p $ constructADT' tname cname ps ips
 
 defOpPrec :: Parser Statement
 defOpPrec = do

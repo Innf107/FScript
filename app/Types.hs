@@ -113,3 +113,9 @@ instance Show Assoc where
     show AssocNone = "AssocNone"
     show AssocLeft = "AssocLeft"
     show AssocRight= "AssocRight"
+
+strAsRTV :: String -> RTValue
+strAsRTV s = ListV $ fmap CharV s
+
+strAsEx :: String -> Expr
+strAsEx = Literal . ListL . fmap (Literal . CharL)

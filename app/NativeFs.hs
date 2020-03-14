@@ -90,9 +90,6 @@ rtVAsMChar :: RTValue -> Maybe Char
 rtVAsMChar (CharV c) = Just c
 rtVAsMChar x = Nothing
 
-strAsRTV :: String -> RTValue
-strAsRTV s = ListV $ map CharV s
-
 addNumF :: EvalVar -> RTValue
 addNumF eV = FuncV "x" (Value $ Eager $ NativeF addFInner M.empty) M.empty
     where

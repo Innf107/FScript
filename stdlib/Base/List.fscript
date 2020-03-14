@@ -39,6 +39,10 @@ replicate x i = if (i <= 0)
 <<HT4 l>> head l @ getAt 1 l @ getAt 2 l @ getAt 3 l @ drop 4 l;
 <<HT5 l>> head l @ getAt 1 l @ getAt 2 l @ getAt 3 l @ getAt 4 l @ drop 5 l;
 
+fst = head;
+
+snd = getAt 1;
+
 <<T l>> head l @ getAt 1 l @ getAt 2 l @ getAt 3 l @ getAt 4 l @ getAt 5 l @ getAt 6 l @ getAt 7 l;
 
 padStart x i l = ((replicate x (i - (length l))) + l);
@@ -162,6 +166,13 @@ init 1 20 += tclass "List" \l -> if l
 scanl 3 20 += tclass ["Function", "ANY", "List"] \f z l -> if l
     then let (HT x xs) = l in [z:(scanl f z xs)]
     else [x];
+
+splitAt 2 20 += tclass ["Num", "List"] \n l -> if n <= 0
+    then [[], l]
+    else let (HT x xs) = l in let (T f s) = splitAt (n - 1) xs in [x:f, s];
+
+--TODO: Test: Will probably work, but foldl is still broken
+elem 2 20 += tclass ["ANY", "List"] \v l -> any ((==)v) l;
 
 
 
