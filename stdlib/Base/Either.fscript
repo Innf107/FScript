@@ -1,16 +1,4 @@
--- Either := Left val:ANY | Right val:ANY;
-
-Left x = {
-    Type: "Either",
-    Variant: "Left",
-    val: x
-};
-
-Right x = {
-    Type: "Either",
-    Variant: "Right"
-    val: x
-};
+Either := Left val | Right val;
 
 map 2 30 += mapRight;
 

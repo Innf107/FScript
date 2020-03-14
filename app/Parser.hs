@@ -107,7 +107,7 @@ defADT :: [Op] -> Parser [Statement]
 defADT ops = do
     tname <- identifier
     symbol ":="
-    (adtConst tname) `sepBy1` (symbol "|") 
+    (adtConst tname) `sepBy1` (reservedOp "|")
     where
         adtConst :: String -> Parser Statement
         adtConst tname = do
@@ -115,11 +115,14 @@ defADT ops = do
             cname <- identifier
             ps <- many adtParam
             return $ constructADT tname cname ps
-        adtParam = do
+        adtParam = try (do
             n <- identifier
             symbol ":"
             t <- identifier
-            return (n, t)
+            return (n, t)) <|>
+            do
+                n <- identifier
+                return (n, "ANY")
         constructADT :: String -> String -> [(String, String)] -> Statement
         constructADT tname cname ps = Def $ NormalDef cname $ FCall (FCall (Var "tclass") (Literal $ ListL $ (strAsEx . snd) <$> ps)) $
            constructADT' tname cname (fst <$> ps) (fst <$> ps)

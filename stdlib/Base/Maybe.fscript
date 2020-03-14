@@ -1,15 +1,4 @@
--- Either := Just ANY | Nothing
-
-Just x = {
-    Type: "Maybe",
-    Variant: "Just",
-    val: x
-};
-
-Nothing = {
-    Type: "Maybe",
-    Variant: "Nothing"
-};
+Maybe := Just val | Nothing;
 
 map 2 30 += tclass ["Function", "Maybe"] \f m -> if (get "Variant" m == "Just")
     then Just (f (get "val" m))
