@@ -64,15 +64,17 @@ print 42;
 ```
 
 If instead of haskell or F#, you're used to languages like Java or Scala, that last example may have confused you. Unlike in Java where you have to surround fumction arguments in parentheses and seperate them with commas, you just have to seperate them with spaces ib FScript.
+`Java`
 ```Java
 f(x, y, z)
 ```
+`Haskell`
 ```haskell
 f x y z
 ```
 
-This is due to a property of the language called explicit currying. If you wamt to learn more you should probably look up implicit currying in haskell, but I'm going to provide a TLDR:
-If an FScript function takes more than one argument, it actually returns a new fumction that captures the first and takes the second argument to return a result.
+This is due to a property of the language called explicit currying. If you want to learn more, you should probably look up implicit currying in haskell, but I'm going to provide a summary:
+If an FScript function takes more than one argument, it actually just takes the first and returns a new function that captures this first one and takes the remaining arguments to return a result.
 This means that a function call like
 ```haskell
 f x y = x + y;
@@ -83,7 +85,7 @@ f x = \y -> x + y;
 ```
 
 A very convenient consequence of this is *partial application*.
-Partial application means, not giving a function all arguments to produce a new function that just takes those arguments. This is very useful when working with higher order functions like `map` or `filter`.
+Partial application means, not giving a function all arguments, to produce a new function that just takes those remaining arguments. This is very useful when working with higher order functions like `map` or `filter`.
 
 Example:
 ```haskell
@@ -91,6 +93,9 @@ add x y = x + y;
 
 map (add 5) [1, 2, 3];
 -- [6, 7, 8]
+
+-- the same as
+map (\x -> add 5 x) [1, 2, 3];
 ```
 This function `add` would usually take 2 arguments and add them up, but in this example it is only supplied 1 (5).
 Thus it returns a new function that only takes the second argument and adds it to the first (5). You can imagine that new function like this:
@@ -99,6 +104,9 @@ f y = that only takes the second argument and adds it to the first (5). You can 
 ```haskell
 f y = 5 + y;
 ```
+
+**Lambdas!**
+In those examples, you may have seen me use *Lambda expressions* already. A lambda can basically be thought of as a function literal. FScript and haskell both use `\ for them, because the 
 
 ## <a name="2.1">2.1 Types
 
