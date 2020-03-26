@@ -1,6 +1,6 @@
 Either := Left val | Right val;
 
-map 2 30 += mapRight;
+map 2 30 += tclass ["Function", "Either"] second;
 
 second 2 30 += tclass ["Function", "Either"] \f e -> bimap id f e;
 

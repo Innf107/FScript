@@ -1,45 +1,32 @@
---type Ratio = {
---  enum: Num,
---  denom: Num
---}
+Ratio := Ratio enum:Num denom:Num;
 
-ratio = \e -> \d -> {
-        enum: e,
-        denom: d
-    };
+first 2 30 += tclass ["Function", "Ratio"] (update "enum");
 
-mapEnum = \f -> \r -> {
-        enum: f (get "enum" r),
-        denom: get "denom" r
-    };
+second 2 30 += tclass ["Function", "Ratio"] (update "denom");
 
-mapDenom = \f -> \r -> {
-        enum: get "enum" r,
-        denom: f (get "denom" r)
-    };
+bimap 3 30 += tclass ["Function", "Function", "Ratio"] \f g -> (first f) ° (second g);
 
-mapBoth = \f -> \g -> \r -> {
-        enum: f (get "enum" r),
-        denom: g (get "denom" r)
-    };
+(%) = Ratio;
 
-% = ratio;
+shorten = tclass "Ratio" \r -> let gd = gcd (get "enum" r) (get "denom" r) in
+    bimap (divBy gd) (divBy gd) r;
 
-shorten = \r -> let gd = gcd (get "enum" r) (get "denom" r) in
-    mapBoth (divBy gd) (divBy gd) r;
+(==) 2 30 += tclass ["Ratio", "Ratio"] \r1 r2 -> let s1 = shorten r1 in let s2 = shorten r2 in
+    (s1.get "enum" == s2.get "enum") && (s1.get "denom" == s2.get "denom");
 
-eqR = \r1 -> \r2 -> (shorten r1) == (shorten r2);
+(*) 2 30 += tclass ["Ratio", "Ratio"] \r1 r2 -> shorten $ (r1.get "enum" * r2.get "enum") % (r1.get "denom" * r2.get "denom");
 
-<==> = eqR;
+invert = \r -> (r.get "denom") % (r.get "enum");
 
-<*> = \r1 -> \r2 -> shorten (mapBoth (* (get "enum" r2)) (* (get "denom" r2)) r1);
+(/) 2 30 += tclass ["Ratio", "Ratio"] \r1 r2 -> r1 * (invert r2);
 
-invert = \r -> ratio (get "denom" r) (get "enum" r);
+show 1 30 += tclass "Ratio" \r -> let r_ = shorten r in "(" + (showInt (get "enum" r_)) + "/" + (showInt (get "denom" r_)) + ")";
 
-</> = \r1 -> \r2 -> r1 <*> (invert r2);
+showNoS = tclass "Ratio" \r -> "(" + (showInt $ r.get "enum") + "/" + (showInt $ r.get "denom") + ")";
 
-showR = \r -> let r_ = shorten r in "(" + (show (get "enum" r_)) + "/" + (show (get "denom" r_)) + ")";
+(+) 2 50 += tclass ["Ratio", "Ratio"] \r1 r2 -> (((r1.get "enum") * (r2.get "denom")) + ((r2.get "enum") * (r1.get "denom"))) % (r1.get "denom" * r2.get "denom");
 
-<+> = \r1 -> \r2 -> let s1 = (r1 <*> (get "denom" r2)) in shorten (mapEnum (+ (get "enum" r2)) r1);
+-- (1 % 3) + (1 % 2) = (2 % 6) + (3 % 6) = (5 % 6)
+-- (1 % 3) + (1 % 2) = ((1 * 2) + (1 * 3)) % (3 * 2)
 
-<-> = \r1 -> \r2 -> let s1 = (r1 <*> (get "denom" r2)) in shorten (mapEnum (\x -> x - (get "enum" r2)) r1);
+(-) 2 30 += tclass ["Ratio", "Ratio"] \r1 r2 -> (((r1.get "enum") * (r2.get "denom")) - ((r2.get "enum") * (r1.get "denom"))) % ((r1.get "denom") * (r2.get "denom"));

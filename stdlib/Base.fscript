@@ -10,26 +10,26 @@ id x = x;
 f ° g = \x -> f (g x);
 (∘) = (°);
 const x y = x;
-putLn = tclass "String" \x -> put (x + "\n");
+putLn = tclass "String" \x -> put (x `addList` "\n");
 print = putLn ° show;
 printP = putLn ° showP;
 printOrExec x = if ((typeof x) == "IO") then x else print x;
 putRaw = putLn ° debugRaw;
 not x = if x then False else True;
+(==) 2 10 += eq;
 eq x y = not (ord x y);
 toBool = not ∘ not;
 flip f x y = f y x;
 x |> f = f x;
-(==) = eq;
 x /= y = not (x == y);
 (!=) = (/=);
 x >> y = x >>= (const y);
 
-is_ x t = ((typeof x) == t) || (if ((typeof x) == "Record") then ((get "Type" x) == t) else False);
+is_ x t = ((typeof x) `eq` t) || (if ((typeof x) `eq` "Record") then ((get "Type" x) `eq` t) else False);
 
 isT = flip is;
 
-is x t = (is_ x t) || ((t == "String") && isString x) || (t == "ANY");
+is x t = (is_ x t) || ((t `eq` "String") && isString x) || (t `eq` "ANY");
 
 isString = all (\x -> x `is_` "Char");
 
@@ -54,7 +54,7 @@ tclass tl f = if (tl && (isString tl))
         then let (HT t ts) = tl in
             \y -> if (y `is` t)
                 then tclass ts (f y)
-                else throw "FClass" ("Not Type " + t) y
+                else throw "FClass" ("Not Type " `addList` t) y
         else f;
 
 fclass = \pl -> \f -> if (pl `is` "Function")
@@ -63,10 +63,11 @@ fclass = \pl -> \f -> if (pl `is` "Function")
         then let (HT p ps) = pl in
             \y -> if (p y)
                 then fclass ps (f y)
-                else throw "FClass" ("Does not match the predicate" + t) y
+                else throw "FClass" ("Does not match the predicate") y
         else f;
 
 
+--TODO: Maybe could be (+)?
 show 1 30 += tclass "String" \x -> ['"'] + x + ['"'];
 
 show 1 20 += tclass "Num" showNum;
@@ -85,6 +86,9 @@ showP = \x -> showPInner x 0;
 
 showPInner 1 0 += \x -> const (show x);
 
+showInt = tclass "Num" \x -> let s = show x in if ('e' `elem` s)
+then s
+else takeWhile (\x -> x /= '.') s;
 
 (+) 2 20 += tclass ["Num", "Num"] addNum;
 

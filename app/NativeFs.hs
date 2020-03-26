@@ -210,7 +210,7 @@ getF eV = FuncV "n" (Value $ Eager $ NativeF getInner M.empty) M.empty
             RecordV m -> case rtVAsMStr n of
                 Nothing -> throwRT "Type" ("get needs its first argument to be of type String. The value '" ++ show n ++ "' is not a String!") state
                 Just s  -> fromMaybe NullV $ lookup s m
-            x -> throwRT "Type" ("get needs its second argument to be of type Map. The value '" ++ show x ++ "' is not a Map!") state
+            x -> throwRT "Type" ("get needs its second argument to be of type Record. The value '" ++ show x ++ "' is not a Record!") state
             where
                 n = fromMaybe (NumV $ -999) $ (`eV` state) <$> M.lookup "n" (getClosures state)
 
@@ -222,7 +222,7 @@ setF eV = FuncV "n" (Literal (LambdaL "x" (Value $ Eager $ NativeF setInner M.em
             RecordV m -> case rtVAsMStr n of
                 Nothing -> throwRT "Type" ("set needs its first argument to be of type String. The value '" ++ show n ++ "' is not a String!") state
                 Just s  -> RecordV $ setAL s x m
-            x -> throwRT "Type" ("set needs its second argument to be of type Map. The value '" ++ show x ++ "' is not a Map!") state
+            x -> throwRT "Type" ("set needs its second argument to be of type Record. The value '" ++ show x ++ "' is not a Record!") state
             where
                 n = fromMaybe (NumV $ -999) $ (`eV` state) <$> M.lookup "n" (getClosures state)
                 x = fromMaybe (NumV $ -777) $ (`eV` state) <$> M.lookup "x" (getClosures state)
@@ -242,6 +242,16 @@ entriesF eV _ state            = throwRT "Type" ("Not a Record") state
 
 toCodeF :: EvalVar -> RTValue -> RTState -> RTValue
 toCodeF eV v state = strAsRTV "NYI"--(toCode v)
+
+debugFClassesF :: EvalVar -> RTValue -> RTState -> RTValue
+debugFClassesF eV v state = ListV $ map strAsRTV $ M.keys (getFClasses state)
+
+debugFClassF :: EvalVar -> RTValue -> RTState -> RTValue
+debugFClassF eV v state = case rtVAsMStr v of
+    Nothing -> throwDRT "Type" "FClass needs its first argument to be of type string" v state
+    Just fc -> case (M.lookup fc (getFClasses state)) of
+        Nothing -> throwDRT "Argument" "FClass does not exist" (strAsRTV fc) state
+        (Just (FClassObj _ is _)) -> ListV $ map (\(FClassInstance p _) -> NumV (fromIntegral p)) is
 
 --toCode :: RTValue -> String
 --toCode (NumV x)           = show x

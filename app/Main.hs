@@ -30,6 +30,7 @@ import qualified Data.Map as M
 import Control.Monad.State.Lazy (State(..))
 import Control.Monad.Identity (Identity(..))
 
+
 updateVals :: (M.Map String Variable -> M.Map String Variable) -> RTState -> RTState
 updateVals f state = state {getVals=f(getVals state)}
 
@@ -65,7 +66,8 @@ emptyState = RTState {getVals=Eager <$> M.fromList (nativeFs ++ nativeVals), get
 nativeFs :: [(String, RTValue)]
 nativeFs = (\(x, y) -> (x, NativeF (y evalVar) M.empty)) <$> [("put", putF), ("debugRaw", debugRawF), ("head", headF),
     ("tail", tailF), ("typeof", typeofF), ("eval", evalF), ("pureIO", pureIOF), ("sys", sysF),
-    ("round", roundF), ("showNum", showNumF), ("entries", entriesF), ("debugState", debugStateF), ("toCode", toCodeF)]
+    ("round", roundF), ("showNum", showNumF), ("entries", entriesF), ("debugState", debugStateF), ("toCode", toCodeF),
+    ("debugFClass", debugFClassF), ("debugFClasses", debugFClassesF)]
 
 nativeVals :: [(String, RTValue)]
 nativeVals = (second (\f -> f evalVar)) <$> [("addNum", addNumF), ("subNum", subNumF), ("ord", ordF), ("mulNum", mulNumF),
@@ -250,7 +252,6 @@ eval (FCall fx ax)                    = get >>= \state -> do
                     return x
                 (NativeF f cls)     -> return $ f av (updateClosures (M.union cls) state')
                 (FClass n xs cls)   -> do
---TODO:          Maybe unneccessary
                     evalFC (FClass n xs cls) cls state' av
                 ExceptionV et em ed st -> return $ ExceptionV et em ed st
                 x                   -> return $ ExceptionV "Type" ("Tried to call a value that is not a function! The value was '" ++ show x ++ "'") NullV (getStackTrace state)
@@ -288,7 +289,7 @@ eval (FCall fx ax)                    = get >>= \state -> do
                 --    let (a:as) = cls
                 --    state <- get
 --TODO:         More than FuncV?
-        evalFC (FClass n fcs cls) icls istate av = return (FClass (n - 1) fcs (Eager av:cls))
+        evalFC (FClass n fcs cls) icls istate av = return (FClass (n - 1) fcs ((Eager av):cls))
 
 
 eval (Let (NormalDef n vx) ex) = do

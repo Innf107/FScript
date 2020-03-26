@@ -62,7 +62,11 @@ skipLast i l = take ((length l) - i) l;
 
 (>>=) 2 20 += tclass ["List", "Function"] (flip flatMap);
 
-any f = foldl (\acc cur -> acc || (f cur)) False;
+any = tclass ["Function", "List"] \f l -> if l
+then let (HT x xs) = l in if f x
+    then True
+    else any f xs
+else False;
 
 
 all f l = if (f `is_` "Function") && (l `is_` "List") then
@@ -127,9 +131,11 @@ map 2 20 += tclass ["Function", "List"] \f l ->
                  else [];
 
 
-(+) 2 20 += tclass ["List", "List"] \a b -> if a
-        then let (HT x xs) = a in (x : (xs + b))
-        else b;
+(+) 2 20 += addList;
+
+addList = tclass ["List", "List"] \a b -> if a
+                  then let (HT x xs) = a in (x : (xs `addList` b))
+                  else b;
 
 (-) 2 10 += tclass "List" (flip delete);
 
@@ -174,7 +180,24 @@ splitAt 2 20 += tclass ["Num", "List"] \n l -> if n <= 0
 --TODO: Test: Will probably work, but foldl is still broken
 elem 2 20 += tclass ["ANY", "List"] \v l -> any ((==)v) l;
 
+contains = flip elem;
 
+sort 1 20 += tclass "List" \l -> if l
+    then let (HT x xs) = l in let (T sm lg) = partition (\y -> y < x) xs in
+        sort sm + [x] + sort lg
+    else [];
 
--- Not quite lazy enough
+zipWith 3 20 += tclass ["Function", "List", "List"] \f l1 l2 -> if (l1 && l2)
+    then let (HT x xs) = l1 in let (HT y ys) = l2 in (f x y):(zipWith f xs ys)
+    else [];
+
+zip 2 20 += tclass ["List", "List"] $ zipWith (\x y -> [x, y]);
+
+--TODO: Not quite lazy enough
 --iterate = tclass ["Function", "ANY"] \f x -> x:(iterate f (f x));
+
+takeWhile 2 20 += tclass ["Function", "List"] \f l -> if l
+then let (HT x xs) = l in if f x
+    then x:(takeWhile f xs)
+    else []
+else [];

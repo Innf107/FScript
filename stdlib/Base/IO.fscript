@@ -29,11 +29,7 @@ show 1 20 += tclass "IO" (const "<IO>");
     }
 -}
 
-fd = \i -> \nb -> {
-    Type:"FD",
-    fd:i,
-    isNonBlocking:nb
-};
+FD := fd fd:Int isNonBlocking:Int;
 
 stdin = fd 0 0;
 stdout = fd 1 0;

@@ -202,7 +202,8 @@ expr ops = buildExpressionParser (makeOpTable ops) (term ops) <?> "expression"
 
 makeOpTable :: [Op] -> [[Operator String () Identity Expr]]
 makeOpTable ops = [ [Prefix (reservedOp "~" >> return (FCall $ Var "flip"))]
-                  , [Infix (spaces >> return (\f x -> FCall f x)) AssocLeft]
+                  , [Infix (symbol "." >> return (\x f -> FCall (FCall (Var "flip") f) x)) AssocLeft]
+                  , [Infix (spaces >> return FCall) AssocLeft]
                   , [Prefix (symbol "-" >> return (\x -> FCall (FCall (Var "-") (Literal (NumL 0))) x))]
                   ]
                   ++
